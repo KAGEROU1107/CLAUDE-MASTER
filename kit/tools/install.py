@@ -36,10 +36,16 @@ def _payload(kit):
     out['CLAUDE.md']=core+b'\nInstalled kit reference: `.claude/claude-master/kit/`. Resolve core/, kit/, and other kit references against that directory; user files and private state stay in the project.\n'
     return out
 
-def _plan(root,kit):
+def _plan(root,kit, *, preserve_claude_md=False):
     root=_root(root); kit=Path(kit).resolve(strict=True)
     if root==kit or root==kit.parent: raise ValueError('install into your project, not distribution checkout')
     payload=_payload(kit)
+    preserved=[]
+    if preserve_claude_md:
+        instructions=safe_path(root,'CLAUDE.md')
+        if not instructions.is_file(): raise ValueError('--preserve-claude-md requires an existing regular CLAUDE.md')
+        del payload['CLAUDE.md']
+        preserved.append('CLAUDE.md')
     ignore=safe_path(root,'.gitignore')
     conflicts=[]; exists=[]; create=[]
     if not ignore.exists(): payload={'.gitignore':IGNORE,**payload}
@@ -53,16 +59,16 @@ def _plan(root,kit):
             if p.is_file() and p.read_bytes()==b: exists.append(rel)
             else: conflicts.append(rel)
         else: create.append(rel)
-    return root,payload,{'status':'MERGE_REQUIRED' if conflicts else 'PREVIEW','create':create,'existing':exists,'conflicts':conflicts,'private_state_created':False,'settings_or_hooks_enabled':False}
+    return root,payload,{'status':'MERGE_REQUIRED' if conflicts else 'PREVIEW','create':create,'existing':exists,'conflicts':conflicts,'preserved':preserved,'private_state_created':False,'settings_or_hooks_enabled':False}
 
-def preview(root,kit):
-    plan=_plan(root,kit)[2]
-    if plan['conflicts']: plan['next']='Existing files differ. Nothing will be written until each conflict is merged by hand; then rerun the preview.'
+def preview(root,kit, *, preserve_claude_md=False):
+    plan=_plan(root,kit,preserve_claude_md=preserve_claude_md)[2]
+    if plan['conflicts']: plan['next']='Existing files differ. Review each conflict. For a manually integrated root CLAUDE.md, rerun with --preserve-claude-md; other kit files must match the payload exactly.'
     return plan
 
-def apply(root,kit):
-    root,payload,plan=_plan(root,kit)
-    if plan['conflicts']: return {**plan,'created':[],'next':'Nothing was written. Ask Claude to show the diff for each conflict and merge it by hand (for CLAUDE.md, append the kit rules to your own file), then rerun the preview.'}
+def apply(root,kit, *, preserve_claude_md=False):
+    root,payload,plan=_plan(root,kit,preserve_claude_md=preserve_claude_md)
+    if plan['conflicts']: return {**plan,'created':[],'next':'Nothing was written. Review each conflict. After manually integrating the kit rules into root CLAUDE.md, use --preserve-claude-md. Other kit files must match the payload exactly; preserve custom copies separately.'}
     created=[]
     try:
         for rel in plan['create']:
@@ -78,8 +84,8 @@ def apply(root,kit):
     return {**plan,'status':'VERIFIED','created':created,'next':'Verify Git ignores and tracking before any personal data; confirm skill discovery in installed Claude Code.'}
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--root',required=True);p.add_argument('--apply',action='store_true');a=p.parse_args()
-    try: result=(apply if a.apply else preview)(a.root,Path(__file__).resolve().parents[1])
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--root',required=True);p.add_argument('--apply',action='store_true');p.add_argument('--preserve-claude-md',action='store_true',help='Keep an existing root CLAUDE.md after manually reviewing/integrating kit rules; does not validate its contents');a=p.parse_args()
+    try: result=(apply if a.apply else preview)(a.root,Path(__file__).resolve().parents[1],preserve_claude_md=a.preserve_claude_md)
     except (OSError,ValueError) as e: result={'status':'BLOCKED','error_type':type(e).__name__,'reason':str(e)[:200]}
     print(json.dumps(result,indent=2)); return 0 if result['status'] in {'PREVIEW','VERIFIED'} else 1
 if __name__=='__main__': sys.exit(main())

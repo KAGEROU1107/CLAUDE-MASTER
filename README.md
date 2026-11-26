@@ -39,7 +39,7 @@ printf '%s' 'owner/repo' | openssl dgst -sha256 -hmac "$PROVENANCE_KEY"
 ## Tests and release
 
 ```sh
-python3 -I -m unittest discover -s tests -v
+python3 -I -B -m unittest discover -s tests -v
 ```
 
 Local deterministic tests and the V3 shell entrypoint smoke tests have been run. Verify actual Claude Code/Herdr runtime integration, real BATON clear/resume, exact branch diff, legacy migration, privacy and license before release. Keep generated user data out of public Git. The previous V2 kit remains available in Git history at commit `8b663cc`.

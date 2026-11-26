@@ -27,11 +27,17 @@ class TestRuntime(unittest.TestCase):
             self.assertEqual(r.verify(root,p),[])
             (root/'STATE.json').write_text('changed')
             self.assertTrue(r.verify(root,p))
-    def test_escape_and_symlink_rejected(self):
+    def test_escape_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
             with self.assertRaises(ValueError): r.safe_path(root,'../escape')
-            (root/'link').symlink_to('/tmp',target_is_directory=True)
+    def test_symlink_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            try: (root/'link').symlink_to('/tmp',target_is_directory=True)
+            except OSError as e:
+                if getattr(e,'winerror',None)==1314: self.skipTest('Windows symlink privilege (WinError 1314) unavailable')
+                raise
             with self.assertRaises(ValueError): r.safe_path(root,'link/a')
     def test_missing_file_and_empty_next_action_fail(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -5,6 +5,12 @@ from install import preview,apply
 from release_scan import scan
 ROOT=Path(__file__).resolve().parents[1]
 KIT=ROOT/'kit'
+def _symlink_or_skip(case,link,target,*,target_is_directory=False):
+    try: link.symlink_to(target,target_is_directory=target_is_directory)
+    except OSError as e:
+        if getattr(e,'winerror',None)==1314: case.skipTest('Windows symlink privilege (WinError 1314) unavailable')
+        raise
+
 class InstallerTests(unittest.TestCase):
     def test_preview_is_read_only_and_apply_is_idempotent(self):
         with tempfile.TemporaryDirectory() as t:
@@ -26,7 +32,7 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse((root/'.claude').exists())
     def test_unsafe_destination_blocks_before_writes(self):
         with tempfile.TemporaryDirectory() as t,tempfile.TemporaryDirectory() as outside:
-            root=Path(t); (root/'.claude').symlink_to(outside,target_is_directory=True)
+            root=Path(t); _symlink_or_skip(self,root/'.claude',outside,target_is_directory=True)
             with self.assertRaises(ValueError): preview(root,KIT)
             self.assertEqual(list(Path(outside).iterdir()),[])
             self.assertFalse((root/'CLAUDE.md').exists())
@@ -54,10 +60,14 @@ class ReleaseScanTests(unittest.TestCase):
             (root/'guide.md').write_text(private+'\n'+token)
             findings=scan(root,[private]); self.assertEqual({x['type'] for x in findings},{'PRIVATE_IDENTIFIER','SECRET_PATTERN'})
             self.assertNotIn(token,str(findings)); self.assertNotIn(private,str(findings))
-    def test_private_state_and_symlinks_flagged(self):
+    def test_private_state_flagged(self):
         with tempfile.TemporaryDirectory() as t:
-            root=Path(t); (root/'.cm-private').mkdir(); (root/'link').symlink_to('/tmp')
-            self.assertEqual({x['type'] for x in scan(root,[])},{'PRIVATE_PATH','SYMLINK'})
+            root=Path(t); (root/'.cm-private').mkdir()
+            self.assertEqual({x['type'] for x in scan(root,[])},{'PRIVATE_PATH'})
+    def test_symlinks_flagged(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t); _symlink_or_skip(self,root/'link','/tmp')
+            self.assertEqual({x['type'] for x in scan(root,[])},{'SYMLINK'})
     def test_private_identifier_in_filename_not_exposed(self):
         with tempfile.TemporaryDirectory() as t:
             root=Path(t); private='secret-project-example'; (root/(private+'.md')).write_text('text')

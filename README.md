@@ -1,64 +1,53 @@
-# CLAUDE-MASTER
+# CLAUDE-MASTER V3 — Advanced Evolution
 
-Bootstrap kit that lets Claude Code set up a persistent, modular, low-usage AI workspace by itself.
-Authority: KAGEROU. Mode: audit first, ask before anything risky.
+A beginner-oriented Claude Code bootstrap kit with expert-level planning, research, verification, persistent memory and adaptive skill development. Advanced Evolution is the default within the user's approved scope. This is a **review candidate**, not a live-tested installer or released version.
 
-## Contents
-```
-README.md
-kit/
-  CLAUDE_MASTER_BOOTSTRAP_v2.md   the prompt Claude Code follows (phases P0-P7, rules, pacing)
-  PROTOCOL.md                     where every file lives + how Claude must behave
-  bootstrap.sh                    creates the workspace skeleton (dry-run by default)
-  organizer.sh                    sorts inbox/ into the workspace (preview by default)
-```
+> [!IMPORTANT]
+> **Model notice.** Run this kit with a **high-end model at high (or higher) thinking/effort** — e.g. the strongest model your plan offers, checked with `/model` and `/effort`. Setup, architecture, persona design and audits are multi-step reasoning tasks; smaller models at low effort skip gates, misread state and produce more bugs. After setup, routine work may drop to a smaller model (see *Quality and budget gate*). The kit never switches models or spends extra on its own.
 
-## Quick start
-1. Copy the kit into your project folder:
-   ```bash
-   git clone https://github.com/KAGEROU1107/CLAUDE-MASTER.git /tmp/claude-master
-   cp -r /tmp/claude-master/kit ./kit
-   ```
-2. Start Claude Code in that folder and enter:
-   ```
-   Read kit/PROTOCOL.md and @kit/CLAUDE_MASTER_BOOTSTRAP_v2.md. Run P0 only.
-   ```
-3. Claude reads the kit, audits your environment, then stops and waits for `GO` before each next phase.
+## Start here
 
-Manual run (optional):
-```bash
-bash kit/bootstrap.sh                           # preview, changes nothing
-bash kit/bootstrap.sh --apply --root <folder>   # create the skeleton
-bash tools/organizer.sh                         # preview inbox sorting
-bash tools/organizer.sh --apply                 # move files (writes recovery/undo-<ts>.sh)
+1. Get the public kit into a separate folder; open Claude Code in your own project, not the reference repository. See [START_HERE](kit/START_HERE.md).
+2. Paste: `Read kit/START_HERE.md, kit/CLAUDE_MASTER_BOOTSTRAP_v3.md and kit/PROTOCOL.md from the reference kit. I am a beginner. Start read-only WP00 and explain the next action.` Supply the actual kit location if different.
+3. Approve the local workspace and budget after the audit. For optional generic installation, `bash kit/bootstrap.sh --root <project-folder>` previews; add `--apply` only after review. Existing conflicting files are preserved and require a manual merge. Claude will interview you, create a WORKPLAN, investigate with ANALYSIS, execute bounded WORKPHASE tasks and verify results.
+4. When blocked, Claude researches public documentation and GitHub automatically within the approved budget; it adapts only verified, compatible, licensed solutions. It learns preferences and updates authorized local Markdown and knowledge. Protected instructions, installs, external transfers and publication remain approval-gated.
+5. At 80% verified context, Claude saves and verifies BATON before asking you to use `/clear` and then `/baton resume`. Actual command and hook support must be verified. Session/weekly allowance is separate; clearing does not reset it.
+
+## Quality and budget gate
+
+Routine work uses the smallest adequate available model. Architecture, hard debugging, security review, high-risk migration, persona/authority design and release review require the strongest suitable authorized model and high-or-greater verified effort (or documented equivalent). Claude checks `/model` and `/effort` or supported controls, asks before any setting change or additional spend, and holds critical work when quality or budget cannot be verified. See [PACING](kit/core/PACING.md) for the mandatory task tag, headroom estimates and conservative fallback. No plan bypass, silent paid upgrade or fabricated meter.
+
+## Optional enhancements
+
+- [Personas](kit/personas/README.md): four generic profiles, a persona skill and a local validator. They select task behavior and approved shared skills, not new powers or independent agents.
+- [Herdr](kit/HERDR_QUICKSTART.md): optional terminal organization with detach/reattach; use plain Claude Code if it is enough. The official terminal upstream is Apache-2.0; no Herdr code or private mods are bundled. Live Herdr integration has not been tested.
+- [Protocol](kit/PROTOCOL.md), [acceptance matrix](docs/ACCEPTANCE.md), [workplan](docs/WORKPLAN.md), [test report](docs/LOCAL_TEST_REPORT.txt).
+
+## Provenance
+
+Two private repositories were read **read-only** as design inspiration. Nothing from them — code, schema, names, profiles, paths or data — is included; the public designs here are written independently. They are recorded as **keyed fingerprints** (`HMAC-SHA256(key, lowercase "owner/repo")`). The key is held privately by the maintainer and is not in this repository, so the fingerprints cannot be reversed by guessing names. The maintainer can verify or update a row with:
+
+```sh
+printf '%s' 'owner/repo' | openssl dgst -sha256 -hmac "$PROVENANCE_KEY"
 ```
 
-## Phases
-| Phase | Purpose |
-|---|---|
-| P0 | Audit environment, usage meter, backup (read-only) |
-| P1 | Grill: max 5 questions per round |
-| P2 | Architecture proposal + pacing plan |
-| P3 | Foundation: run bootstrap.sh |
-| P4 | BATON session handover skill |
-| P5 | Measure before/after |
-| P6 | Open-source research (only on "GO RESEARCH") |
-| P7 | Skills + learning loop |
+| Ref | Fingerprint (HMAC-SHA256) | Used for |
+|---|---|---|
+| R1 | `b06a123f37810e02978d2a58bddc78db37394b20a5c315228728f0b88faab709` | Abstract terminal-workspace and bounded-worker concepts (see `kit/HERDR_QUICKSTART.md`) |
+| R2 | `6439bb11daeab93c93d3396ff095cf413a5b88685338d978d186700ea4890103` | Abstract persona schema, shared-skill binding and evidence concepts (see `kit/personas/`) |
 
-Every phase ends with REPORT, STOP, wait for GO.
+## Tests and release
 
-## Safety design
-- bootstrap.sh and organizer.sh: dry-run by default, never delete, never overwrite, no network, no installs.
-- Secret-like files (.env, keys, tokens) are skipped and never read.
-- Every organizer run writes an undo script and a log line.
-- Created only with KAGEROU approval: settings.json, hooks, statusLine, BATON skill, first commit, push.
-- Pacing: every phase carries model, thinking level, session % and weekly % checks. Unknown meter = UNAVAILABLE, never estimated.
+```sh
+python3 -I -m unittest discover -s tests -v
+```
 
-## Verified
-- Shell syntax check of both scripts: PASS.
-- Throwaway-folder test: dry-run changes nothing, re-apply is idempotent, organizer sorts 7 and skips 5 (secret-like, symlink, directory, unknown type), collisions never overwrite, undo restores inbox, secret scan flags a planted fake key without printing it.
-- shellcheck: not run (UNVERIFIED).
-- Not tested inside a live Claude Code session. Statusline usage fields and `/baton` argument handling depend on your installed version; P0 checks them.
+Local deterministic tests and the V3 shell entrypoint smoke tests have been run. Verify actual Claude Code/Herdr runtime integration, real BATON clear/resume, exact branch diff, legacy migration, privacy and license before release. Keep generated user data out of public Git. The previous V2 kit remains available in Git history at commit `8b663cc`.
 
-## Status
-Version: v2. No license set yet.
+## Contributing
+
+Improvements are welcome from anyone. Read [CONTRIBUTING](CONTRIBUTING.md), open an issue or a pull request against `main`. CI runs the tests and the leak scan on every PR; the maintainer reviews and merges. Report security problems privately as described in [SECURITY](SECURITY.md).
+
+## License
+
+[MIT](LICENSE). Herdr is a separate project (Apache-2.0) and is not bundled.

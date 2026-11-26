@@ -3,13 +3,13 @@
 A beginner-oriented Claude Code bootstrap kit with expert-level planning, research, verification, persistent memory and adaptive skill development. Advanced Evolution is the default within the user's approved scope. This is a **review candidate**, not a live-tested installer or released version.
 
 > [!IMPORTANT]
-> **Model notice.** Run this kit with a **high-end model at high (or higher) thinking/effort** — e.g. the strongest model your plan offers, checked with `/model` and `/effort`. Setup, architecture, persona design and audits are multi-step reasoning tasks; smaller models at low effort skip gates, misread state and produce more bugs. After setup, routine work may drop to a smaller model (see *Quality and budget gate*). The kit never switches models or spends extra on its own.
+> **Model notice.** Run this kit with a **high-end model at high (or higher) thinking/effort** — e.g. the strongest model your plan offers, checked with `/model` and `/effort`. Setup, architecture, persona design and audits are multi-step reasoning tasks; verify the selected model and effort against the task; this repository has no comparative model benchmark. After setup, routine work may drop to a smaller model (see *Quality and budget gate*). The kit never switches models or spends extra on its own.
 
 ## Start here
 
 1. Get the public kit into a separate folder; open Claude Code in your own project, not the reference repository. See [START_HERE](kit/START_HERE.md).
 2. Paste: `Read kit/START_HERE.md, kit/CLAUDE_MASTER_BOOTSTRAP_v3.md and kit/PROTOCOL.md from the reference kit. I am a beginner. Start read-only WP00 and explain the next action.` Supply the actual kit location if different.
-3. Approve the local workspace and budget after the audit. For optional generic installation, `bash kit/bootstrap.sh --root <project-folder>` previews; add `--apply` only after review. Existing conflicting files are preserved and require a manual merge. Claude will interview you, create a WORKPLAN, investigate with ANALYSIS, execute bounded WORKPHASE tasks and verify results.
+3. Approve the local workspace and budget after the audit. For optional generic installation, `bash kit/bootstrap.sh --root <project-folder>` previews; add `--apply` only after review. Existing conflicting files are preserved. After manually integrating the kit rules into your root `CLAUDE.md`, add `--preserve-claude-md` to keep that file; other kit-file conflicts still block installation. Claude will interview you, create a WORKPLAN, investigate with ANALYSIS, execute bounded WORKPHASE tasks and verify results.
 4. When blocked, Claude researches public documentation and GitHub automatically within the approved budget; it adapts only verified, compatible, licensed solutions. It learns preferences and updates authorized local Markdown and knowledge. Protected instructions, installs, external transfers and publication remain approval-gated.
 5. At 80% verified context, Claude saves and verifies BATON before asking you to use `/clear` and then `/baton resume`. Actual command and hook support must be verified. Session/weekly allowance is separate; clearing does not reset it.
 

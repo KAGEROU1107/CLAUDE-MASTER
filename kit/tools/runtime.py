@@ -49,6 +49,7 @@ def meters(data, session, now=None):
 
 def fresh(m,session,now=None):
     now=time.time() if now is None else now
+    if not isinstance(m,dict): return False
     ts=m.get('ts')
     return bool(session and m.get('session_id')==session and type(ts) in (int,float) and 0<=now-ts<=1800)
 
@@ -76,7 +77,7 @@ def checkpoint(root, files, next_action):
 
 
 def verify(root, record):
-    if not isinstance(record,dict) or record.get('schema')!=1 or not isinstance(record.get('files'),dict) or not record['files'] or not isinstance(record.get('next_action'),str) or not record['next_action'].strip(): return ['INVALID_CHECKPOINT']
+    if not isinstance(record,dict) or type(record.get('schema')) is not int or record.get('schema')!=1 or not isinstance(record.get('files'),dict) or not record['files'] or not isinstance(record.get('next_action'),str) or not record['next_action'].strip(): return ['INVALID_CHECKPOINT']
     drift=[]
     for f,h in record['files'].items():
         try:

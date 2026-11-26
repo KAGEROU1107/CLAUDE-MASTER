@@ -7,4 +7,12 @@ Do not run a random install command. Claude should inspect versions, permissions
 
 For difficult architecture, security or recovery tasks Claude will check the available model and high thinking/effort setting and ask before spending more. Routine tasks stay inexpensive. Optional terminal organization: HERDR_QUICKSTART.md. Optional role profiles: personas/README.md. Neither is required to begin.
 
-Optional approved local installer (Bash + Python 3.9 or newer): `bash kit/bootstrap.sh --root <project-folder>` previews; add `--apply` only after review. Existing differing files stop the installer for a manual merge; it never writes private state. Before saving private data, verify ignored paths and no already tracked private data using Git. Windows without Bash may use the documented Python entry point from the reference kit; test support on that host first.
+Optional approved local installer (Bash + Python 3.9 or newer): `bash kit/bootstrap.sh --root <project-folder>` previews; add `--apply` only after review. Existing differing files stop the installer for review; it never writes private state. Before saving private data, verify ignored paths and no already tracked private data using Git. For an existing root `CLAUDE.md`, inspect the kit rules and integrate the relevant instructions manually. Then preview with `--preserve-claude-md`; use the same flag with `--apply` to keep that file byte-for-byte. The result lists it under `preserved`; this is not verification that its instructions are complete. Other conflicting kit files still require exact reconciliation; this flag does not skip them.
+
+Windows without Bash can preview from the reference checkout with:
+
+```powershell
+py -3 -I -B kit/tools/install_entry.py --root "C:\path\to\project"
+```
+
+Add `--apply` after reviewing the preview, and `--preserve-claude-md` only after reviewing an existing root instruction file. Python must be 3.9 or newer. Windows behavior remains untested.

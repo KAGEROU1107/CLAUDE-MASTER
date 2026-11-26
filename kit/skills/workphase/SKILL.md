@@ -12,3 +12,5 @@ Input: approved plan, READY task ID. Output: task artifacts, evidence, reconcile
 4. Read back files and actual state; update task status and evidence; reconcile WORKPLAN, WORKPHASE, STATE and decisions. Do not mark VERIFIED until acceptance evidence exists.
 5. Extract a relevant lesson, checkpoint next action and report plainly. If interrupted mark IN_PROGRESS or BLOCKED, not complete.
 Acceptance: targeted output exists, test evidence supports result, unrelated changes preserved, next task identifiable, no unauthorized push.
+
+Before starting, reconcile the actual model/effort and meter readings with the pacing tag. Reclassify or HOLD critical work when the gate is not met; do not downgrade silently. At combined context and allowance limits save BATON then pause.

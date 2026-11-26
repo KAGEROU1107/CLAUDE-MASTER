@@ -12,3 +12,5 @@ Input: request, current project and analysis. Output: revised WORKPLAN.md, stabl
 4. Explain the plan to a beginner in terms of outcomes, not internal file complexity. Request scope approval if needed. Do not stop for redundant confirmations within approved work.
 5. On new evidence revise affected tasks; preserve completed receipts and identify superseded assumptions. Hand off to workphase with exact task ID and exit test.
 Acceptance: no circular dependency, every task has observable completion criteria, no new protected authority inferred, next action executable or named blocker.
+
+Every substantial task includes the pacing tag from core/PACING.md (model, effort, estimated/measured cost, FITS_SESSION, FITS_WEEK, WHEN, evidence). Critical work cannot become READY without verified high-end suitable model/high effort and quota headroom. UNKNOWN is not a pass.

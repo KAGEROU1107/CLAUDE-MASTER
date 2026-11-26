@@ -1,0 +1,55 @@
+CLAUDE-MASTER V3 continuation — local evidence
+Date: 2026-11-27 (Malaysia)
+Original ZIP: 42 entries; original MANIFEST.sha256 readback passed.
+Source base: public main 8b663cc, prior reported local commit c960c9b inaccessible.
+Red phase: persona/pacing tests failed due to absent modules; installer/scanner tests failed due to absent modules. Implemented helpers, then reran tests.
+Command: python3 -I -m unittest discover -s tests -v
+Result: 35 passed, 0 failed, 0 errors, 0 skipped.
+Command: bash -n kit/bootstrap.sh
+Result: PASS. Shell entrypoint preview and apply in temporary directory tested by unittest; generic installation idempotent and preserves differing user instructions; unsafe paths and ignore-rule conflict blocked.
+Command: python3 -I -B kit/tools/release_scan.py . --private-denylist <private file outside release tree>
+Result: NO_PATTERN_HITS (no findings); candidate-only pattern scan, not proof of absence of sensitive information. Private denylist is not included. Identifier fingerprints in README are deliberately present pending owner acceptance.
+NOT RUN: complete V2 migration, Git history/staged-tree review of target checkout, live Claude Code hooks/statusline/skill activation, real /clear and /baton resume, automatic external discovery, model selection, live Herdr, Windows, budget benchmarks, independent release review.
+HOLD: license activation, publication of identifier fingerprints, actual branch reconciliation, exact release review. No GitHub writes.
+test_existing_gitignore_without_private_rule_requires_merge (test_installer_scan.InstallerTests.test_existing_gitignore_without_private_rule_requires_merge) ... ok
+test_existing_user_instructions_are_not_overwritten (test_installer_scan.InstallerTests.test_existing_user_instructions_are_not_overwritten) ... ok
+test_preview_is_read_only_and_apply_is_idempotent (test_installer_scan.InstallerTests.test_preview_is_read_only_and_apply_is_idempotent) ... ok
+test_shell_entrypoint_preview_and_apply (test_installer_scan.InstallerTests.test_shell_entrypoint_preview_and_apply) ... ok
+test_unsafe_destination_blocks_before_writes (test_installer_scan.InstallerTests.test_unsafe_destination_blocks_before_writes) ... ok
+test_clean_text (test_installer_scan.ReleaseScanTests.test_clean_text) ... ok
+test_private_identifier_in_filename_not_exposed (test_installer_scan.ReleaseScanTests.test_private_identifier_in_filename_not_exposed) ... ok
+test_private_name_and_synthetic_secret_flagged_without_value (test_installer_scan.ReleaseScanTests.test_private_name_and_synthetic_secret_flagged_without_value) ... ok
+test_private_state_and_symlinks_flagged (test_installer_scan.ReleaseScanTests.test_private_state_and_symlinks_flagged) ... ok
+test_critical_requires_confirmed_high_end_and_effort (test_persona_pacing.PacingTests.test_critical_requires_confirmed_high_end_and_effort) ... ok
+test_heavy_session_gate (test_persona_pacing.PacingTests.test_heavy_session_gate) ... ok
+test_missing_meters_block_critical_not_routine (test_persona_pacing.PacingTests.test_missing_meters_block_critical_not_routine) ... ok
+test_pacing_fit_checks_measured_headroom (test_persona_pacing.PacingTests.test_pacing_fit_checks_measured_headroom) ... ok
+test_quota_and_context_take_priority (test_persona_pacing.PacingTests.test_quota_and_context_take_priority) ... ok
+test_unfitting_work_deferred (test_persona_pacing.PacingTests.test_unfitting_work_deferred) ... ok
+test_unknown_fit_holds_critical (test_persona_pacing.PacingTests.test_unknown_fit_holds_critical) ... ok
+test_unknown_fits_not_true (test_persona_pacing.PacingTests.test_unknown_fits_not_true) ... ok
+test_weekly_expected_pacing (test_persona_pacing.PacingTests.test_weekly_expected_pacing) ... ok
+test_examples_validate (test_persona_pacing.PersonaTests.test_examples_validate) ... ok
+test_extra_keys_rejected (test_persona_pacing.PersonaTests.test_extra_keys_rejected) ... ok
+test_invalid_authority_rejected (test_persona_pacing.PersonaTests.test_invalid_authority_rejected) ... ok
+test_permissions_do_not_expand (test_persona_pacing.PersonaTests.test_permissions_do_not_expand) ... ok
+test_profile_requests_forbidden_capability (test_persona_pacing.PersonaTests.test_profile_requests_forbidden_capability) ... ok
+test_traversal_and_duplicate_skills_rejected (test_persona_pacing.PersonaTests.test_traversal_and_duplicate_skills_rejected) ... ok
+test_unapproved_skill_rejected (test_persona_pacing.PersonaTests.test_unapproved_skill_rejected) ... ok
+test_atomic_write_and_readback (test_runtime.TestRuntime.test_atomic_write_and_readback) ... ok
+test_checkpoint_detects_drift_and_corruption (test_runtime.TestRuntime.test_checkpoint_detects_drift_and_corruption) ... ok
+test_escape_and_symlink_rejected (test_runtime.TestRuntime.test_escape_and_symlink_rejected) ... ok
+test_meter_uses_real_values_and_rejects_invalid (test_runtime.TestRuntime.test_meter_uses_real_values_and_rejects_invalid) ... ok
+test_missing_file_and_empty_next_action_fail (test_runtime.TestRuntime.test_missing_file_and_empty_next_action_fail) ... ok
+test_stale_or_other_session_never_reused (test_runtime.TestRuntime.test_stale_or_other_session_never_reused) ... ok
+test_thresholds_distinct (test_runtime.TestRuntime.test_thresholds_distinct) ... ok
+test_two_failures_trigger_research_including_repeat (test_runtime.TestRuntime.test_two_failures_trigger_research_including_repeat) ... ok
+test_unknown_meter_stays_unknown (test_runtime.TestRuntime.test_unknown_meter_stays_unknown) ... ok
+test_weekly_high_precedes_noncritical_context (test_runtime.TestRuntime.test_weekly_high_precedes_noncritical_context) ... ok
+
+----------------------------------------------------------------------
+Ran 35 tests in 1.702s
+
+OK
+
+Re-verification (Claude, 2026-11-27): 35/35 tests passed in an isolated copy (python3 -I -B, Python 3.13). bash -n kit/bootstrap.sh passed. Installer preview, conflict hold and python-version guard smoke-tested in a temp project. release_scan on the exact staged tree with a private denylist (kept outside the repo): NO_PATTERN_HITS. Live Claude Code and Herdr runs: NOT RUN.

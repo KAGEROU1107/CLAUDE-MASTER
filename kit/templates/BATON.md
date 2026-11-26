@@ -11,3 +11,5 @@ Errors and blockers:
 Relevant memory / skill refs:
 Exact next action:
 Manifest path / verification status: UNVERIFIED
+
+Active profile (optional ID/digest and approved skill bindings): NONE

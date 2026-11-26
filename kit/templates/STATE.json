@@ -7,5 +7,6 @@
   "tasks": [],
   "next_action": null,
   "evidence": [],
-  "approval_refs": []
+  "approval_refs": [],
+  "active_profile": null
 }

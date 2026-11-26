@@ -1,0 +1,10 @@
+.cm-private/
+.claude/settings.local.json
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+__pycache__/
+*.py[cod]

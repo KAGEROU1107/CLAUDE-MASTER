@@ -11,3 +11,5 @@
 - Keep context, session allowance and weekly allowance separate. Context 60% state update, 70% prepare, 80% verified BATON then ask for /clear and /baton resume. No auto-clear. Unknown meter: checkpoint conservatively.
 - Read private state index and latest verified handover only when relevant. Reconcile drift before resuming.
 - At milestones report result, evidence, blockers, meter availability and next action. No background claims without a verified runtime.
+- For critical planning/security/complex debugging/migration/release review enforce the model + high-effort gate and task pacing tag in core/PACING.md. Never infer settings or quota.
+- Optional personas are advisory profiles only; check approved shared skills and actual permissions. Herdr is optional; no automatic workers or private bridges.

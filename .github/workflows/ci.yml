@@ -1,0 +1,27 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Read-only: PRs from forks get no secrets and cannot write to the repo.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Python version
+        run: python3 --version
+      - name: Unit tests (isolated mode)
+        run: python3 -I -B -m unittest discover -s tests -v
+      - name: Shell syntax
+        run: bash -n kit/bootstrap.sh
+      - name: Release leak scan
+        run: python3 -I -B kit/tools/release_scan.py .

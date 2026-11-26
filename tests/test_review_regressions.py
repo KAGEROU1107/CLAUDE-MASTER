@@ -43,7 +43,12 @@ class ReviewRegressions(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / 'custom.md').write_text('User rules')
-            (root / 'CLAUDE.md').symlink_to(root / 'custom.md')
+            try:
+                (root / 'CLAUDE.md').symlink_to(root / 'custom.md')
+            except OSError as e:
+                if getattr(e, 'winerror', None) == 1314:
+                    self.skipTest('Windows symlink privilege (WinError 1314) unavailable')
+                raise
             with self.assertRaises(ValueError):
                 apply(root, KIT, preserve_claude_md=True)
             self.assertFalse((root / '.claude').exists())
@@ -90,7 +95,12 @@ class ReviewRegressions(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / 'real/sub').mkdir(parents=True)
-            (root / 'alias').symlink_to(root / 'real', target_is_directory=True)
+            try:
+                (root / 'alias').symlink_to(root / 'real', target_is_directory=True)
+            except OSError as e:
+                if getattr(e, 'winerror', None) == 1314:
+                    self.skipTest('Windows symlink privilege (WinError 1314) unavailable')
+                raise
             for target in (root / 'alias', root / 'alias/sub'):
                 with self.subTest(target=target), self.assertRaises(ValueError):
                     scan(target, [])

@@ -133,7 +133,7 @@ def _plan(root, kit, *, target='claude', preserve_claude_md=False, preserve_gemi
     create = []
     if not ignore.exists():
         payload = {'.gitignore': IGNORE, **payload}
-    elif not ignore.is_file() or '.cm-private/' not in ignore.read_text(encoding='utf-8').splitlines():
+    elif not ignore.is_file() or '.cm-private/' not in ignore.read_text(encoding='utf-8-sig').splitlines():
         conflicts.append('.gitignore')
     review_rules = []
     if target == 'antigravity':

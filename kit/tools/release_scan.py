@@ -50,7 +50,7 @@ def main():
     if a.private_denylist:
         deny=Path(a.private_denylist).resolve(strict=True)
         if deny.is_relative_to(root.resolve(strict=True)): p.error('denylist must be outside release tree')
-        ids=deny.read_text(encoding='utf-8').splitlines()
+        ids=deny.read_text(encoding='utf-8-sig').splitlines()
     try:
         findings=scan(root,ids)
     except (OSError,ValueError):

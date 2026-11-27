@@ -423,7 +423,7 @@ def _validate_batch_items(items):
         if extra:
             raise ValueError(f'item[{idx}] has unsupported key(s): {sorted(extra)}')
         kind = item.get('kind')
-        if kind not in ALLOWED_KINDS:
+        if not isinstance(kind, str) or kind not in ALLOWED_KINDS:
             raise ValueError(f'item[{idx}] has unsupported kind')
         title = item.get('title')
         if not isinstance(title, str) or not title.strip():
@@ -600,8 +600,8 @@ def query_events(root, project_id, *, kind=None, text=None, include_redacted=Fal
         clauses.append('kind = ?')
         params.append(kind)
     if text:
-        clauses.append('(title LIKE ? OR content LIKE ?)')
-        like = f'%{text}%'
+        clauses.append("(title LIKE ? ESCAPE '!' OR content LIKE ? ESCAPE '!')")
+        like = '%' + text.replace('!', '!!').replace('%', '!%').replace('_', '!_') + '%'
         params.extend([like, like])
     where = (' WHERE ' + ' AND '.join(clauses)) if clauses else ''
     events = []
@@ -795,7 +795,7 @@ def main():
             res = backup_ledger(a.root, a.project)
         else:
             res = verify_ledger(a.root, a.project)
-    except (LedgerError, OSError, ValueError) as e:
+    except (LedgerError, OSError, ValueError, sqlite3.Error) as e:
         res = {'status': 'BLOCKED', 'error_type': type(e).__name__, 'reason': str(e)[:200]}
     print(json.dumps(res, indent=2))
     return 0 if res.get('status') in {'OK', 'VERIFIED', 'REDACTED'} else 1

@@ -6,6 +6,7 @@ For safe retries across process crashes, callers should supply a deterministic i
 """
 import argparse, contextlib, hashlib, json, os, re, sqlite3, sys, tempfile, time, uuid
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from privacy_check import check_privacy
 from runtime import safe_path
 

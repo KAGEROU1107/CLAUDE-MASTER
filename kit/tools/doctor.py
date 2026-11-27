@@ -55,13 +55,19 @@ def diagnose(root, kit, *, target='claude', preserve_claude_md=False, preserve_g
     elif privacy.get('status') == 'FAIL':
         next_steps.append('Fix .gitignore so .cm-private/ is ignored and untracked before writing private state.')
     if install_status.get('status') != 'IN_SYNC':
+        diff_count = len(install_status.get('differing_or_colliding', []))
         flag = f'--target {target} ' if target != 'claude' else ''
-        next_steps.append(f'Run preview then apply: python -I -B kit/tools/install_entry.py {flag}--root "<project>" --apply')
+        if diff_count > 0:
+            next_steps.append(f'Inspect {diff_count} differing/conflicting file(s) and reconcile manually (apply refuses to overwrite existing changes); rerun doctor after merging.')
+        else:
+            next_steps.append(f'Run preview then apply: python -I -B kit/tools/install_entry.py {flag}--root "<project>" --apply')
     if not next_steps:
-        next_steps.append('Environment is ready. Start your project with Claude Code or Antigravity.')
+        next_steps.append('Deterministic environment checks passed (note: an installed doctor.py compares against its own kit copy, not upstream). Live AI/hook integration is verified separately.')
 
     return {
         'status': 'READY' if ready else 'ACTION_NEEDED',
+        'scope': 'DETERMINISTIC_PREFLIGHT_ONLY',
+        'live_ai_runtime': 'UNVERIFIED',
         'target': target,
         'python': {'version': py_ver, 'ok': py_ok},
         'git': {'available': bool(git_version), 'version': git_version},
@@ -93,7 +99,14 @@ def main():
             preserve_gemini_md=a.preserve_gemini_md,
         )
     except (OSError, ValueError) as e:
-        res = {'status': 'BLOCKED', 'error_type': type(e).__name__, 'reason': str(e)[:200], 'writes_performed': False}
+        res = {
+            'status': 'BLOCKED',
+            'scope': 'DETERMINISTIC_PREFLIGHT_ONLY',
+            'live_ai_runtime': 'UNVERIFIED',
+            'error_type': type(e).__name__,
+            'reason': str(e)[:200],
+            'writes_performed': False,
+        }
     print(json.dumps(res, indent=2))
     return 0 if res.get('status') == 'READY' else 1
 

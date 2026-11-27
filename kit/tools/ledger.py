@@ -12,6 +12,9 @@ from runtime import safe_path
 
 SCHEMA_VERSION = 1
 ALLOWED_KINDS = frozenset({'decision', 'lesson', 'note', 'checkpoint', 'correction', 'verification'})
+BATCH_ITEM_KEYS = frozenset({'kind', 'title', 'content', 'source', 'idempotency_key', 'supersedes'})
+MAX_BATCH_ITEMS = 100
+MAX_BATCH_BYTES = 1_048_576
 PROJECT_ID_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$')
 WIN_RESERVED = frozenset(
     {'con', 'prn', 'aux', 'nul'}
@@ -343,6 +346,137 @@ def append_event(root, project_id, *, kind, title, content='', source='', idempo
     }
 
 
+def _validate_batch_items(items):
+    if not isinstance(items, list) or not (1 <= len(items) <= MAX_BATCH_ITEMS):
+        raise ValueError(f'batch items must be a list of 1..{MAX_BATCH_ITEMS} dicts')
+    seen_keys = set()
+    normalized = []
+    for idx, item in enumerate(items):
+        if not isinstance(item, dict):
+            raise ValueError(f'item[{idx}] must be a dict')
+        extra = set(item.keys()) - BATCH_ITEM_KEYS
+        if extra:
+            raise ValueError(f'item[{idx}] has unsupported key(s): {sorted(extra)}')
+        kind = item.get('kind')
+        if kind not in ALLOWED_KINDS:
+            raise ValueError(f'item[{idx}] has unsupported kind')
+        title = item.get('title')
+        if not isinstance(title, str) or not title.strip():
+            raise ValueError(f'item[{idx}] title must be a non-empty string')
+        content = item.get('content', '')
+        source = item.get('source', '')
+        if not isinstance(content, str):
+            raise ValueError(f'item[{idx}] content must be a string')
+        if not isinstance(source, str):
+            raise ValueError(f'item[{idx}] source must be a string')
+        idem = item.get('idempotency_key')
+        if not isinstance(idem, str) or not idem.strip():
+            raise ValueError(f'item[{idx}] requires a non-empty string idempotency_key')
+        if idem in seen_keys:
+            raise ValueError(f'item[{idx}] duplicates an idempotency_key within the same batch')
+        seen_keys.add(idem)
+        sup = item.get('supersedes')
+        if sup is not None and (not isinstance(sup, str) or not sup.strip()):
+            raise ValueError(f'item[{idx}] supersedes must be a non-empty string or null')
+        normalized.append({
+            'kind': kind,
+            'title': title,
+            'content': content,
+            'source': source,
+            'idempotency_key': idem,
+            'supersedes': sup,
+        })
+    return normalized
+
+
+def _check_replay_row(existing, item, label=''):
+    prefix = f'{label} ' if label else ''
+    if existing['redacted']:
+        raise ValueError(f'{prefix}redacted idempotency_key cannot recreate its event')
+    same = (
+        existing['kind'] == item['kind']
+        and existing['title'] == item['title']
+        and (existing['content'] or '') == (item['content'] or '')
+        and (existing['source'] or '') == (item['source'] or '')
+        and existing['supersedes'] == item['supersedes']
+    )
+    if not same:
+        raise ValueError(f'{prefix}idempotency_key reused with different payload')
+    return {
+        'event_id': existing['event_id'],
+        'revision': existing['revision'],
+        'idempotent_replay': True,
+    }
+
+
+def append_batch(root, project_id, items, *, expected_rev=None, now=None):
+    project_id = _validate_project_id(root, project_id)
+    normalized = _validate_batch_items(items)
+    if expected_rev is not None and (type(expected_rev) is not int or expected_rev < 0):
+        raise ValueError('expected_rev must be a non-negative integer')
+    priv = _require_privacy(root, project_id)
+    db_rel, _, _ = _paths(project_id)
+    db_path = safe_path(root, db_rel)
+    if not db_path.is_file():
+        raise FileNotFoundError('ledger not initialized; run init first')
+    ts = float(time.time() if now is None else now)
+
+    with contextlib.closing(_connect(db_path)) as conn:
+        try:
+            conn.execute('BEGIN IMMEDIATE')
+        except sqlite3.OperationalError as e:
+            raise LedgerBusyError(f'ledger busy: {e}') from e
+        try:
+            # 1. All replay checks first (partial replay OK; all-replay skips CAS & revision bump).
+            resolved = [None] * len(normalized)
+            new_indices = []
+            for idx, item in enumerate(normalized):
+                existing = conn.execute('SELECT * FROM events WHERE idempotency_key=?', (item['idempotency_key'],)).fetchone()
+                if existing is not None:
+                    resolved[idx] = _check_replay_row(existing, item, label=f'item[{idx}]')
+                else:
+                    new_indices.append(idx)
+
+            cur_rev = int(conn.execute("SELECT value FROM meta WHERE key='revision'").fetchone()[0])
+            if new_indices:
+                # 2. Apply expected_rev once if any item is new.
+                if expected_rev is not None and cur_rev != expected_rev:
+                    raise RevisionConflictError(f'expected revision {expected_rev}, actual {cur_rev}')
+                # 3. Validate supersedes against already-committed events only (no intra-batch refs).
+                for idx in new_indices:
+                    sup = normalized[idx]['supersedes']
+                    if sup is not None:
+                        target = conn.execute('SELECT redacted FROM events WHERE event_id=?', (sup,)).fetchone()
+                        if target is None:
+                            raise ValueError(f'item[{idx}] supersedes target not found')
+                        if target['redacted']:
+                            raise ValueError(f'item[{idx}] cannot supersede a redacted event')
+                # 4. Insert all new items in order (+1 revision each).
+                for idx in new_indices:
+                    item = normalized[idx]
+                    cur_rev += 1
+                    event_id = f'evt-{uuid.uuid4().hex[:12]}'
+                    conn.execute(
+                        '''INSERT INTO events(event_id, idempotency_key, revision, kind, title, content, source, supersedes, redacted, created_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)''',
+                        (event_id, item['idempotency_key'], cur_rev, item['kind'], item['title'], item['content'], item['source'], item['supersedes'], ts),
+                    )
+                    resolved[idx] = {'event_id': event_id, 'revision': cur_rev, 'idempotent_replay': False}
+                conn.execute("UPDATE meta SET value=? WHERE key='revision'", (str(cur_rev),))
+            conn.execute('COMMIT')
+        except Exception:
+            conn.execute('ROLLBACK')
+            raise
+    return {
+        'status': 'OK',
+        'project_id': project_id,
+        'revision': cur_rev,
+        'count': len(resolved),
+        'results': [{'index': i, **r} for i, r in enumerate(resolved)],
+        'warnings': priv.get('warnings', []) + _sync_warnings(root),
+    }
+
+
 def redact_event(root, project_id, event_id):
     project_id = _validate_project_id(root, project_id)
     priv = _require_privacy(root, project_id)
@@ -437,32 +571,34 @@ def query_events(root, project_id, *, kind=None, text=None, include_redacted=Fal
         like = f'%{text}%'
         params.extend([like, like])
     where = (' WHERE ' + ' AND '.join(clauses)) if clauses else ''
-    with contextlib.closing(_connect(db_path)) as conn:
-        conn.execute('BEGIN DEFERRED')
-        try:
-            rev = int(conn.execute("SELECT value FROM meta WHERE key='revision'").fetchone()[0])
-            rows = conn.execute(
-                f'SELECT event_id, idempotency_key, revision, kind, title, content, source, supersedes, redacted, created_at FROM events{where} ORDER BY seq DESC LIMIT ?',
-                (*params, limit),
-            ).fetchall()
-            conn.execute('COMMIT')
-        except Exception:
-            conn.execute('ROLLBACK')
-            raise
     events = []
     used_chars = 0
     truncated = False
     omitted_event_id = None
-    for r in rows:
-        rec = dict(r)
-        sz = _event_char_size(rec)
-        if used_chars + sz > max_chars:
-            truncated = True
-            if not events:
-                omitted_event_id = rec['event_id']
-            break
-        events.append(rec)
-        used_chars += sz
+    with contextlib.closing(_connect(db_path)) as conn:
+        conn.execute('BEGIN DEFERRED')
+        try:
+            rev = int(conn.execute("SELECT value FROM meta WHERE key='revision'").fetchone()[0])
+            with contextlib.closing(
+                conn.execute(
+                    f'SELECT event_id, idempotency_key, revision, kind, title, content, source, supersedes, redacted, created_at FROM events{where} ORDER BY seq DESC LIMIT ?',
+                    (*params, limit),
+                )
+            ) as cur:
+                for r in cur:
+                    rec = dict(r)
+                    sz = _event_char_size(rec)
+                    if used_chars + sz > max_chars:
+                        truncated = True
+                        if not events:
+                            omitted_event_id = rec['event_id']
+                        break
+                    events.append(rec)
+                    used_chars += sz
+            conn.execute('COMMIT')
+        except Exception:
+            conn.execute('ROLLBACK')
+            raise
     out = {
         'status': 'OK',
         'trust': 'UNTRUSTED_DATA',
@@ -578,6 +714,9 @@ def main():
     ap.add_argument('--idempotency-key')
     ap.add_argument('--expected-rev', type=int)
     ap.add_argument('--supersedes')
+    ab = sub.add_parser('append-batch')
+    ab.add_argument('--file', required=True, help='JSON file path or - for stdin (<= 1 MiB, UTF-8/UTF-8-BOM)')
+    ab.add_argument('--expected-rev', type=int)
     rd = sub.add_parser('redact')
     rd.add_argument('--event-id', required=True)
     qr = sub.add_parser('query')
@@ -599,6 +738,19 @@ def main():
                 kind=a.kind, title=a.title, content=a.content, source=a.source,
                 idempotency_key=a.idempotency_key, expected_rev=a.expected_rev, supersedes=a.supersedes,
             )
+        elif a.cmd == 'append-batch':
+            if a.file == '-':
+                raw = sys.stdin.buffer.read(MAX_BATCH_BYTES + 1)
+            else:
+                fp = Path(a.file)
+                if fp.is_symlink() or not fp.is_file():
+                    raise ValueError('batch file must be a regular non-symlink file')
+                with fp.open('rb') as f:
+                    raw = f.read(MAX_BATCH_BYTES + 1)
+            if len(raw) > MAX_BATCH_BYTES:
+                raise ValueError(f'batch input exceeds {MAX_BATCH_BYTES} bytes')
+            items = json.loads(raw.decode('utf-8-sig'))
+            res = append_batch(a.root, a.project, items, expected_rev=a.expected_rev)
         elif a.cmd == 'redact':
             res = redact_event(a.root, a.project, a.event_id)
         elif a.cmd == 'query':

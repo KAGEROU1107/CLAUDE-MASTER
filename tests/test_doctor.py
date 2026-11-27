@@ -41,11 +41,31 @@ class DoctorTests(unittest.TestCase):
             self.assertEqual(cli.returncode, 0)
             parsed = json.loads(cli.stdout)
             self.assertEqual(parsed['status'], 'READY')
+            self.assertEqual(parsed['scope'], 'DETERMINISTIC_PREFLIGHT_ONLY')
+            self.assertEqual(parsed['live_ai_runtime'], 'UNVERIFIED')
             self.assertTrue(parsed['python']['ok'])
             self.assertTrue(parsed['git']['available'])
             self.assertEqual(parsed['privacy']['status'], 'PASS')
             self.assertEqual(parsed['install']['status'], 'IN_SYNC')
             self.assertEqual(_snapshot_tree(root), before_installed)
+
+            # Differing file -> must NOT tell user to blindly run --apply
+            (root / '.agents/skills/baton/SKILL.md').write_text('edited\n', encoding='utf-8')
+            drifted = diagnose(root, KIT, target='antigravity')
+            self.assertEqual(drifted['status'], 'ACTION_NEEDED')
+            self.assertEqual(drifted['install']['differing_count'], 1)
+            self.assertTrue(any('reconcile manually' in s for s in drifted['next_steps']))
+
+            # BLOCKED result also carries scope and live_ai_runtime
+            blocked = subprocess.run(
+                [sys.executable, '-I', '-B', str(DOCTOR), '--root', str(root), '--target', 'antigravity', '--preserve-claude-md'],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(blocked.returncode, 1)
+            bp = json.loads(blocked.stdout)
+            self.assertEqual(bp['status'], 'BLOCKED')
+            self.assertEqual(bp['scope'], 'DETERMINISTIC_PREFLIGHT_ONLY')
+            self.assertEqual(bp['live_ai_runtime'], 'UNVERIFIED')
 
 
 if __name__ == '__main__':

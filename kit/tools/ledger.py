@@ -247,6 +247,10 @@ def _reconcile_existing_view_tx(vp, conn):
     raise ProjectionDriftError('views/LEDGER_SUMMARY.md was modified externally; refusing to overwrite')
 
 
+def _view_state(vp):
+    return _sha256_bytes(vp.read_bytes()) if vp.exists() else None
+
+
 def _project_views_two_phase(root, db_path, project_id, *, _crash_hook=None):
     """Two-phase pending-hash view writer (crash-safe on both sides of os.replace).
     _crash_hook(stage) is for deterministic crash-injection tests only.
@@ -261,6 +265,8 @@ def _project_views_two_phase(root, db_path, project_id, *, _crash_hook=None):
             conn.execute('BEGIN IMMEDIATE')
             try:
                 _require_project_binding(conn, project_id)
+                # Read before the check: a later edit then differs from this and blocks the replace.
+                seen = _view_state(vp)
                 _reconcile_existing_view_tx(vp, conn)
                 rev, content = _render_view(conn, project_id)
                 digest = _sha256_bytes(content)
@@ -279,12 +285,16 @@ def _project_views_two_phase(root, db_path, project_id, *, _crash_hook=None):
             if _crash_hook is not None:
                 _crash_hook('after_pending_commit')
 
-            # Phase 2: confirm pending is still ours, os.replace, promote pending -> committed.
+            # Phase 2: confirm pending, ledger and view file are unchanged, os.replace, promote.
             conn.execute('BEGIN IMMEDIATE')
             try:
                 meta = _meta_dict(conn)
                 if meta.get('pending_view_sha256') != digest or meta.get('pending_view_revision') != str(rev):
                     raise RevisionConflictError('concurrent view projection superseded pending hash')
+                if _current_revision(conn) != rev:
+                    raise RevisionConflictError('ledger changed while the view was being built; run the update again')
+                if _view_state(vp) != seen:
+                    raise ProjectionDriftError('views/LEDGER_SUMMARY.md changed during the update; refusing to overwrite')
                 os.replace(tmp, vp)
                 tmp = None
                 if _crash_hook is not None:
@@ -546,6 +556,13 @@ def redact_event(root, project_id, event_id):
             rebuilt_view = True
         except ProjectionDriftError:
             warnings.append('VIEW_DRIFT_RETAINED_TEXT: views/LEDGER_SUMMARY.md was edited externally and preserved; it may still retain the redacted text until manually updated or removed.')
+        except RevisionConflictError:
+            warnings.append('VIEW_NOT_REBUILT: the redaction is saved, but another change overtook the view update; views/LEDGER_SUMMARY.md may still retain the redacted text until the view update is run again.')
+        except (OSError, sqlite3.Error, LedgerBusyError) as exc:
+            warnings.append(f'VIEW_NOT_REBUILT: the redaction is saved, but the view update failed ({type(exc).__name__}); views/LEDGER_SUMMARY.md may still retain the redacted text until the view update is run again.')
+    leftovers = sorted(f.name for f in safe_path(root, view_rel).parent.glob('.cm-view-*'))
+    if leftovers:
+        warnings.append(f"VIEW_TEMP_FILES: {', '.join(leftovers)} in the views folder may retain redacted text; delete them once no view update is running.")
     return {
         'status': 'REDACTED',
         'event_id': event_id,

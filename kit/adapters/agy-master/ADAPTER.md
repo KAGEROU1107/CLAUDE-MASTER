@@ -23,8 +23,8 @@ This adapter lets **Google Antigravity (AGY)** use the single-source `CLAUDE-MAS
 
 | Capability | Antigravity Status | Operating Rule |
 |---|---|---|
-| Workspace rules (`GEMINI.md`, `AGENTS.md`, `.agents/rules/*.md`) | **Supported** (unverified live) | Keep `GEMINI.md` compact (`< 24 KB`); review alongside `AGENTS.md`. |
-| Workspace skills (`.agents/skills/*/SKILL.md`) | **Supported** (unverified live) | Progressive disclosure (`name` + `description` only until activated). |
+| Workspace rules (`GEMINI.md`, `AGENTS.md`, `.agents/rules/*.md`) | **CLI smoke-tested (Windows)** | Keep `GEMINI.md` compact (`< 24 KB`); review alongside `AGENTS.md`. IDE and Linux/macOS remain unverified. |
+| Workspace skills (`.agents/skills/*/SKILL.md`) | **CLI smoke-tested (Windows, 14/14)** | Progressive disclosure (`name` + `description` only until activated). IDE and Linux/macOS remain unverified. |
 | Lifecycle hooks (`.agents/hooks.json`) | **Not integrated** | Antigravity supports hooks, but this kit enables zero hooks automatically. |
 | Claude slash commands (`/clear`, `/baton resume`, `/model`, `/effort`, `/context`, `/usage`) | **`UNVERIFIED` / Host-specific** | Do not assume these commands exist in Antigravity. |
 | Context reset & BATON handover | **Manual / milestone mode** | Save + verify BATON (record `host: antigravity`), open a **new conversation**, then ask for `"baton resume"`. Do **not** equate `/compact` with a clean context reset. |

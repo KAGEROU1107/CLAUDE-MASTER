@@ -1,7 +1,7 @@
 # AGY-MASTER — Start Here (Antigravity Adapter, EXPERIMENTAL)
 
 > [!NOTE]
-> **EXPERIMENTAL:** Deterministic installer and unit tests pass; live Antigravity runtime acceptance is still pending.
+> **EXPERIMENTAL (CLI smoke-tested on Windows):** Deterministic installer/unit tests pass and a live Antigravity CLI smoke test verified `GEMINI.md` auto-load, `14/14` skills discovery, `.cm-private/` gitignore, and manual BATON resume. Antigravity IDE and Linux/macOS live runs remain unverified.
 
 Use this adapter to run **CLAUDE-MASTER V3** inside **Google Antigravity (AGY)** while sharing one authoritative kit.
 

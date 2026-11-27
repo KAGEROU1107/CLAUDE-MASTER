@@ -2,6 +2,9 @@
 
 A beginner-oriented Claude Code bootstrap kit with expert-level planning, research, verification, persistent memory and adaptive skill development. Advanced Evolution is the default within the user's approved scope. This is a **review candidate**, not a live-tested installer or released version.
 
+> [!WARNING]
+> **Safety & Experimental Notice.** Use a sandbox/VM/container for sensitive credentials or untrusted repositories, keep MCP servers least-privilege, and manually review scripts before running them. See [Threat Model & Operator Guidance](SECURITY.md#threat-model--operator-guidance).
+
 > [!IMPORTANT]
 > **Model notice.** Run this kit with a **high-end model at high (or higher) thinking/effort** — e.g. the strongest model your plan offers, checked with `/model` and `/effort`. Setup, architecture, persona design and audits are multi-step reasoning tasks; verify the selected model and effort against the task; this repository has no comparative model benchmark. After setup, routine work may drop to a smaller model (see *Quality and budget gate*). The kit never switches models or spends extra on its own.
 

@@ -1,7 +1,7 @@
 # AGY-MASTER — Antigravity Adapter (EXPERIMENTAL)
 
 > [!NOTE]
-> **Status: EXPERIMENTAL.** Deterministic installer and unit tests have been run. Live Antigravity runtime acceptance (rules loading, skill discovery, save → new chat → resume) has **not** yet been verified.
+> **Status: EXPERIMENTAL (CLI smoke-tested).** Deterministic installer/unit tests pass, and a live Antigravity CLI smoke test (`gemini-3.8-flash-low` on Windows) verified auto-loaded `GEMINI.md`, `14/14` `.agents/skills/` discovery, `.cm-private/` gitignore, and manual BATON save → fresh session `"baton resume"`. Antigravity IDE and Linux/macOS live runs remain unverified.
 
 This adapter lets **Google Antigravity (AGY)** use the single-source `CLAUDE-MASTER` V3 kit without forking or duplicating skills, policies, or tools.
 

@@ -7,6 +7,9 @@ A beginner-oriented Claude Code bootstrap kit with expert-level planning, resear
 
 ## Start here
 
+> [!TIP]
+> **Using Google Antigravity (`AGY-MASTER`)?** See [AGY-MASTER Start Here](kit/adapters/agy-master/START_HERE.md) and install with `--target antigravity` (EXPERIMENTAL — live CLI smoke-tested on Windows; IDE and Linux/macOS live runs remain unverified).
+
 1. Get the public kit into a separate folder; open Claude Code in your own project, not the reference repository. See [START_HERE](kit/START_HERE.md).
 2. Paste: `Read kit/START_HERE.md, kit/CLAUDE_MASTER_BOOTSTRAP_v3.md and kit/PROTOCOL.md from the reference kit. I am a beginner. Start read-only WP00 and explain the next action.` Supply the actual kit location if different.
 3. Approve the local workspace and budget after the audit. For optional generic installation, `bash kit/bootstrap.sh --root <project-folder>` previews; add `--apply` only after review. Existing conflicting files are preserved. After manually integrating the kit rules into your root `CLAUDE.md`, add `--preserve-claude-md` to keep that file; other kit-file conflicts still block installation. Claude will interview you, create a WORKPLAN, investigate with ANALYSIS, execute bounded WORKPHASE tasks and verify results.
@@ -19,7 +22,7 @@ Routine work uses the smallest adequate available model. Architecture, hard debu
 
 ## Optional enhancements
 
-- [AGY-MASTER (Antigravity Adapter — EXPERIMENTAL)](kit/adapters/agy-master/START_HERE.md): thin single-source adapter (`--target antigravity`) installing `.agents/claude-master/kit/`, `.agents/skills/`, and `GEMINI.md` without duplicating skills or core rules. See [ADAPTER](kit/adapters/agy-master/ADAPTER.md); live Antigravity runtime acceptance is still pending.
+- [AGY-MASTER (Antigravity Adapter — EXPERIMENTAL, CLI smoke-tested)](kit/adapters/agy-master/START_HERE.md): thin single-source adapter (`--target antigravity`) installing `.agents/claude-master/kit/`, `.agents/skills/`, and `GEMINI.md` without duplicating skills or core rules. See [ADAPTER](kit/adapters/agy-master/ADAPTER.md); live Antigravity CLI smoke test passed on Windows (IDE and Linux/macOS live runs remain unverified).
 - [Personas](kit/personas/README.md): four generic profiles, a persona skill and a local validator. They select task behavior and approved shared skills, not new powers or independent agents.
 - [Herdr](kit/HERDR_QUICKSTART.md): optional terminal organization with detach/reattach; use plain Claude Code if it is enough. The official terminal upstream is Apache-2.0; no Herdr code or private mods are bundled. Live Herdr integration has not been tested.
 - [Protocol](kit/PROTOCOL.md), [acceptance matrix](docs/ACCEPTANCE.md), [workplan](docs/WORKPLAN.md), [test report](docs/LOCAL_TEST_REPORT.txt).

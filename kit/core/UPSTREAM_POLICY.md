@@ -22,7 +22,7 @@ Local evolution (`core/EVOLUTION_POLICY.md`) never modifies or pushes to the ups
 
 ## Privacy gate and scan limits
 - Stage **only** the draft issue/PR text, patch, and commit message in a dedicated temporary folder (never scan `.` as a shortcut). Keep `--private-denylist` outside that folder.
-- Run `python3 -I -B .claude/claude-master/kit/tools/release_scan.py <staging-dir>` (or `kit/tools/release_scan.py` inside the repo) and require `NO_PATTERN_HITS`.
+- Run `python3 -I -B .claude/claude-master/kit/tools/release_scan.py <staging-dir>` (or `.agents/claude-master/kit/tools/release_scan.py` on Antigravity, or `kit/tools/release_scan.py` inside the repo) and require `NO_PATTERN_HITS`.
 - **A clean scan is necessary but does not prove privacy.** Complete a manual redaction checklist (usernames, absolute Windows/Linux paths, private repo names/URLs, internal URLs, emails, employer/proprietary code, tokens, session logs, session URLs) and require human read-through before any external action.
 
 ## Pre-push approval and rights

@@ -19,6 +19,7 @@ Routine work uses the smallest adequate available model. Architecture, hard debu
 
 ## Optional enhancements
 
+- [AGY-MASTER (Antigravity Adapter — EXPERIMENTAL)](kit/adapters/agy-master/START_HERE.md): thin single-source adapter (`--target antigravity`) installing `.agents/claude-master/kit/`, `.agents/skills/`, and `GEMINI.md` without duplicating skills or core rules. See [ADAPTER](kit/adapters/agy-master/ADAPTER.md); live Antigravity runtime acceptance is still pending.
 - [Personas](kit/personas/README.md): four generic profiles, a persona skill and a local validator. They select task behavior and approved shared skills, not new powers or independent agents.
 - [Herdr](kit/HERDR_QUICKSTART.md): optional terminal organization with detach/reattach; use plain Claude Code if it is enough. The official terminal upstream is Apache-2.0; no Herdr code or private mods are bundled. Live Herdr integration has not been tested.
 - [Protocol](kit/PROTOCOL.md), [acceptance matrix](docs/ACCEPTANCE.md), [workplan](docs/WORKPLAN.md), [test report](docs/LOCAL_TEST_REPORT.txt).

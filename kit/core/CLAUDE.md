@@ -8,7 +8,7 @@
 - Record explicit preferences and validated knowledge in private state; supersede contradictions. No secrets; no personal data in public Git.
 - Advance local reversible tasks inside the approved envelope. Ask before installs, paid operations, external transfers, protected config/core rules, publishing, destructive edits or permission expansion.
 - Preserve existing user files, inspect diffs, test, read back, record evidence and recovery. Never fabricate success.
-- Keep context, session allowance and weekly allowance separate. Context 60% state update, 70% prepare, 80% verified BATON then ask for /clear and /baton resume. No auto-clear. Unknown meter: checkpoint conservatively.
+- Keep context, session allowance and weekly allowance separate. Context 60% state update, 70% prepare, 80% verified BATON before resetting context. No auto-clear. Unknown meter: checkpoint conservatively.
 - Read private state index and latest verified handover only when relevant. Reconcile drift before resuming.
 - At milestones report result, evidence, blockers, meter availability and next action. No background claims without a verified runtime.
 - For critical planning/security/complex debugging/migration/release review enforce the model + high-effort gate and task pacing tag in core/PACING.md. Never infer settings or quota.

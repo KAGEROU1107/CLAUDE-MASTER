@@ -212,16 +212,37 @@ def apply(root, kit, *, target='claude', preserve_claude_md=False, preserve_gemi
     return {**plan, 'status': 'VERIFIED', 'created': created, 'next': cfg['verified_next']}
 
 
+def check(root, kit, *, target='claude', preserve_claude_md=False, preserve_gemini_md=False):
+    plan = _plan(root, kit, target=target, preserve_claude_md=preserve_claude_md, preserve_gemini_md=preserve_gemini_md)[2]
+    in_sync = not plan['create'] and not plan['conflicts']
+    res = {
+        'status': 'IN_SYNC' if in_sync else 'DRIFT_DETECTED',
+        'target': target,
+        'missing': plan['create'],
+        'differing_or_colliding': plan['conflicts'],
+        'in_sync_count': len(plan['existing']),
+        'preserved': plan['preserved'],
+        'note': 'Compared against this kit checkout; extra files in the target project are not checked.',
+    }
+    if 'review_existing_rules' in plan:
+        res['review_existing_rules'] = plan['review_existing_rules']
+    return res
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--root', required=True)
     p.add_argument('--target', choices=tuple(TARGETS), default='claude', help='Target host layout (default: claude)')
     p.add_argument('--apply', action='store_true')
+    p.add_argument('--check', action='store_true', help='Read-only drift check against this kit checkout (exit 0 only when in sync)')
     p.add_argument('--preserve-claude-md', action='store_true', help='Keep an existing root CLAUDE.md (--target claude only); does not validate its contents')
     p.add_argument('--preserve-gemini-md', action='store_true', help='Keep an existing root GEMINI.md (--target antigravity only); does not validate its contents')
     a = p.parse_args()
     try:
-        result = (apply if a.apply else preview)(
+        if a.apply and a.check:
+            raise ValueError('--check cannot be combined with --apply')
+        fn = check if a.check else (apply if a.apply else preview)
+        result = fn(
             a.root,
             Path(__file__).resolve().parents[1],
             target=a.target,
@@ -231,7 +252,7 @@ def main():
     except (OSError, ValueError) as e:
         result = {'status': 'BLOCKED', 'error_type': type(e).__name__, 'reason': str(e)[:200]}
     print(json.dumps(result, indent=2))
-    return 0 if result['status'] in {'PREVIEW', 'VERIFIED'} else 1
+    return 0 if result['status'] in {'PREVIEW', 'VERIFIED', 'IN_SYNC'} else 1
 
 
 if __name__ == '__main__':

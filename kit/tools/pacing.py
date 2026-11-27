@@ -1,5 +1,6 @@
 """Pure advisory scheduling; caller must supply verified observations and estimates."""
-from runtime import pct
+from runtime import fresh, pct
+
 
 def assess(meters, task_class, model_tier, effort, model_verified, *,weekly_elapsed_pct=None,estimated_session_pct=None,estimated_weekly_pct=None):
     if task_class not in {'routine','implementation','critical'}: raise ValueError('unknown task class')
@@ -23,3 +24,42 @@ def assess(meters, task_class, model_tier, effort, model_verified, *,weekly_elap
     elif c>=60: decision='STATE_UPDATE'
     else: decision='READY'
     return {'decision':decision,'baton_required':baton,'fits_session':fits_s,'fits_week':fits_w,'model_tier':model_tier,'effort':effort,'task_class':task_class}
+
+
+def assess_fresh(meters, session, task_class, model_tier, effort, model_verified, *, now=None, weekly_elapsed_pct=None, estimated_session_pct=None, estimated_weekly_pct=None):
+    """Validate meter session and freshness via runtime.fresh() before scheduling.
+
+    Returns meters_status in {'FRESH', 'STALE', 'ABSENT'}.
+    Stale readings withhold READY even for routine tasks so an old high-usage reading
+    never silently relaxes into BOUNDED_ONLY; caller must obtain a fresh reading.
+    """
+    if task_class not in {'routine', 'implementation', 'critical'}:
+        raise ValueError('unknown task class')
+    if model_tier not in {'routine', 'mid', 'high_end', 'unknown'}:
+        raise ValueError('unknown model tier')
+    if meters is None or (isinstance(meters, dict) and not meters):
+        res = assess(
+            {}, task_class, model_tier, effort, model_verified,
+            weekly_elapsed_pct=weekly_elapsed_pct,
+            estimated_session_pct=estimated_session_pct,
+            estimated_weekly_pct=estimated_weekly_pct,
+        )
+        return {**res, 'meters_status': 'ABSENT'}
+    if not fresh(meters, session, now=now):
+        return {
+            'decision': 'STALE_METER',
+            'meters_status': 'STALE',
+            'baton_required': False,
+            'fits_session': 'UNKNOWN',
+            'fits_week': 'UNKNOWN',
+            'model_tier': model_tier,
+            'effort': effort,
+            'task_class': task_class,
+        }
+    res = assess(
+        meters, task_class, model_tier, effort, model_verified,
+        weekly_elapsed_pct=weekly_elapsed_pct,
+        estimated_session_pct=estimated_session_pct,
+        estimated_weekly_pct=estimated_weekly_pct,
+    )
+    return {**res, 'meters_status': 'FRESH'}

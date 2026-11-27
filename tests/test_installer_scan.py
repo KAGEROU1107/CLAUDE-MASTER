@@ -45,6 +45,8 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual(apply(root,KIT)['status'],'MERGE_REQUIRED')
             self.assertEqual((root/'.gitignore').read_text(),'node_modules/\n')
     def test_shell_entrypoint_preview_and_apply(self):
+        if os.name=='nt':
+            self.skipTest('POSIX bash shell entrypoint test skipped on Windows; covered on Ubuntu CI and via install_entry.py')
         with tempfile.TemporaryDirectory() as t:
             root=Path(t)
             subprocess.run(['bash','-n',str(KIT/'bootstrap.sh')],check=True)

@@ -1,4 +1,13 @@
 # Start here — beginner onboarding
+
+## How it works in 6 plain steps
+1. **Tell the AI what you want to build** — it asks a few plain-English questions first.
+2. **Check your computer and project** — read-only inspection (or run `python -I -B kit/tools/doctor.py --root "<project>"`).
+3. **Review a simple, safe setup** — preview every file before anything is written.
+4. **Approve the plan** — no installs, pushes, or paid changes without your explicit OK.
+5. **Build, test, and fix** — the AI handles the technical steps and shows real test evidence.
+6. **Save progress and continue later** — private memory stays in `.cm-private/` (gitignored) with verified BATON handovers.
+
 This V3 candidate is a review package, not a released installer. Preserve your current project. Download or clone the public reference kit into a separate folder. Open Claude Code in the project you actually want to work on. Give Claude the path to this kit and paste the following:
 
 > Read kit/CLAUDE_MASTER_BOOTSTRAP_v3.md and kit/PROTOCOL.md from the provided kit. I am a beginner; do the technical work safely and explain decisions simply. Use Advanced Evolution Mode. Audit first, grill me, propose a workplan, then implement the approved foundation. When blocked, proactively research public GitHub and official sources, adapt verified solutions, and improve my authorized local memory, Markdown and workflows. At 80% measured context, save and verify BATON, ask me to /clear, then resume with /baton resume. Preserve existing files; protect privacy; do not install, spend, push or change protected settings without approval. Begin with read-only WP00.
@@ -15,4 +24,4 @@ Windows without Bash can preview from the reference checkout with:
 py -3 -I -B kit/tools/install_entry.py --root "C:\path\to\project"
 ```
 
-Add `--apply` after reviewing the preview, and `--preserve-claude-md` only after reviewing an existing root instruction file. Python must be 3.9 or newer. Windows behavior remains untested.
+Add `--apply` after reviewing the preview, and `--preserve-claude-md` only after reviewing an existing root instruction file. Python must be 3.9 or newer. Windows deterministic installer and tool tests pass in CI; live Claude Code behavior on Windows remains unverified.

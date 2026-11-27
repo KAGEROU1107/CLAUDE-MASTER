@@ -1,0 +1,52 @@
+import json, subprocess, sys, tempfile, unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'kit' / 'tools'))
+from doctor import diagnose
+from install import apply
+
+ROOT = Path(__file__).resolve().parents[1]
+KIT = ROOT / 'kit'
+DOCTOR = KIT / 'tools' / 'doctor.py'
+
+
+def _snapshot_tree(root):
+    out = {}
+    for p in sorted(Path(root).rglob('*')):
+        if '.git' in p.parts:
+            continue
+        rel = p.relative_to(root).as_posix()
+        out[rel] = p.read_bytes() if p.is_file() else None
+    return out
+
+
+class DoctorTests(unittest.TestCase):
+    def test_doctor_performs_zero_writes_on_empty_and_installed_projects(self):
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            before_empty = _snapshot_tree(root)
+            res1 = diagnose(root, KIT, target='antigravity')
+            self.assertEqual(res1['status'], 'ACTION_NEEDED')
+            self.assertFalse(res1['writes_performed'])
+            self.assertEqual(_snapshot_tree(root), before_empty)
+
+            subprocess.run(['git', '-C', str(root), 'init', '-q'], check=True, capture_output=True, text=True)
+            self.assertEqual(apply(root, KIT, target='antigravity')['status'], 'VERIFIED')
+            before_installed = _snapshot_tree(root)
+
+            cli = subprocess.run(
+                [sys.executable, '-I', '-B', str(DOCTOR), '--root', str(root), '--target', 'antigravity'],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(cli.returncode, 0)
+            parsed = json.loads(cli.stdout)
+            self.assertEqual(parsed['status'], 'READY')
+            self.assertTrue(parsed['python']['ok'])
+            self.assertTrue(parsed['git']['available'])
+            self.assertEqual(parsed['privacy']['status'], 'PASS')
+            self.assertEqual(parsed['install']['status'], 'IN_SYNC')
+            self.assertEqual(_snapshot_tree(root), before_installed)
+
+
+if __name__ == '__main__':
+    unittest.main()

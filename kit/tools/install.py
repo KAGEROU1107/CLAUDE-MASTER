@@ -3,6 +3,7 @@ No network, private data, settings, hooks, home copies, Git writes or overwrites
 Run in a trusted, exclusive workspace; not a concurrent-adversary sandbox.
 """
 import argparse, json, os, sys
+from fnmatch import fnmatchcase
 from pathlib import Path
 from runtime import safe_path
 
@@ -41,6 +42,38 @@ def _target_cfg(target):
     if target not in TARGETS:
         raise ValueError(f'unsupported target: {target} (choose claude or antigravity)')
     return TARGETS[target]
+
+
+PRIVATE_RULES = frozenset(
+    prefix + '.cm-private' + suffix for prefix in ('', '/', '**/') for suffix in ('', '/')
+)
+
+
+def _ignores_private(data):
+    """True when this root .gitignore leaves .cm-private/ ignored. Git's last matching line wins.
+    Reads text only; privacy_check.py asks Git itself and stays the authority.
+    """
+    ignored = False
+    text = data.decode('utf-8', 'surrogateescape').removeprefix('﻿')
+    for line in text.split('\n'):
+        rule = line.removesuffix('\r').rstrip(' ')
+        if rule in PRIVATE_RULES:
+            ignored = True
+        elif rule.startswith('!'):
+            pattern = rule[1:].removeprefix('**/').removeprefix('/').removesuffix('/')
+            if fnmatchcase('.cm-private', pattern):
+                ignored = False
+    return ignored
+
+
+def _same_file(rel, installed, expected):
+    """True when the bytes already in the project count as the kit file `rel` (project-relative, posix).
+    A True result means check() reports it in sync and apply() leaves it untouched.
+    """
+    if installed == expected:
+        return True
+    # Git on Windows may check text out as CRLF. Bash cannot run such a script, so .sh stays exact.
+    return not rel.endswith('.sh') and installed.replace(b'\r\n', b'\n') == expected
 
 
 def _root(path):
@@ -133,7 +166,7 @@ def _plan(root, kit, *, target='claude', preserve_claude_md=False, preserve_gemi
     create = []
     if not ignore.exists():
         payload = {'.gitignore': IGNORE, **payload}
-    elif not ignore.is_file() or '.cm-private/' not in ignore.read_text(encoding='utf-8').splitlines():
+    elif not ignore.is_file() or not _ignores_private(ignore.read_bytes()):
         conflicts.append('.gitignore')
     review_rules = []
     if target == 'antigravity':
@@ -147,7 +180,7 @@ def _plan(root, kit, *, target='claude', preserve_claude_md=False, preserve_gemi
             if parent.exists() and not parent.is_dir():
                 raise ValueError('non-directory parent')
         if p.exists():
-            if p.is_file() and p.read_bytes() == b:
+            if p.is_file() and _same_file(rel, p.read_bytes(), b):
                 exists.append(rel)
             else:
                 conflicts.append(rel)
@@ -205,7 +238,7 @@ def apply(root, kit, *, target='claude', preserve_claude_md=False, preserve_gemi
             if p.read_bytes() != payload[rel]:
                 raise IOError('readback failed')
         for rel, b in payload.items():
-            if safe_path(root, rel).read_bytes() != b:
+            if not _same_file(rel, safe_path(root, rel).read_bytes(), b):
                 raise IOError('final readback failed')
     except (OSError, ValueError) as e:
         return {**plan, 'status': 'INCOMPLETE', 'created': created, 'error_type': type(e).__name__, 'next': 'Inspect created files; preserve existing files; reconcile before retry.'}

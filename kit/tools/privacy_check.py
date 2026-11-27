@@ -49,13 +49,14 @@ def _run_git(root, args, timeout=10):
         ['git', '-C', str(root), '-c', 'core.fsmonitor=false', *args],
         env=_clean_env(),
         capture_output=True,
-        text=True,
+        encoding='utf-8',
+        errors='surrogateescape',
         timeout=timeout,
     )
 
 
 def _sha(text):
-    return hashlib.sha256(text.encode('utf-8')).hexdigest()
+    return hashlib.sha256(text.encode('utf-8', 'surrogateescape')).hexdigest()
 
 
 def check_privacy(root, *, probes=None, timeout=10):

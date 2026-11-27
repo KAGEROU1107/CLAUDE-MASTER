@@ -7,6 +7,7 @@ from ledger import (
     PrivacyError,
     ProjectionDriftError,
     RevisionConflictError,
+    append_batch,
     append_event,
     backup_ledger,
     init_ledger,
@@ -204,6 +205,85 @@ class LedgerEngineTests(unittest.TestCase):
             self.assertTrue(q2['truncated'])
             self.assertEqual(q2['events'][0]['event_id'], e2['event_id'])
             self.assertNotIn('omitted_event_id', q2)
+
+    def test_append_batch_validation_replay_rollback_redacted_and_bom_stdin(self):
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            _git_repo(root)
+            init_ledger(root, 'p1')
+
+            # Duplicate key inside same batch rejected even if identical
+            with self.assertRaises(ValueError):
+                append_batch(root, 'p1', [
+                    {'kind': 'note', 'title': 'A', 'idempotency_key': 'dup'},
+                    {'kind': 'note', 'title': 'A', 'idempotency_key': 'dup'},
+                ])
+
+            # Unknown key / per-item expected_rev rejected without echoing secret content
+            with self.assertRaises(ValueError) as ctx:
+                append_batch(root, 'p1', [
+                    {'kind': 'note', 'title': 'A', 'content': 'TOP_SECRET_NEVER_ECHO', 'idempotency_key': 'k0', 'expected_rev': 0},
+                ])
+            self.assertNotIn('TOP_SECRET_NEVER_ECHO', str(ctx.exception))
+
+            # Mid-batch invalid supersedes rolls back entire batch (rev stays 0)
+            with self.assertRaises(ValueError):
+                append_batch(root, 'p1', [
+                    {'kind': 'note', 'title': 'Good', 'idempotency_key': 'k-good'},
+                    {'kind': 'note', 'title': 'Bad', 'idempotency_key': 'k-bad', 'supersedes': 'evt-does-not-exist'},
+                ], expected_rev=0)
+            self.assertEqual(verify_ledger(root, 'p1')['revision'], 0)
+
+            # Normal batch insert
+            b1 = append_batch(root, 'p1', [
+                {'kind': 'decision', 'title': 'D1', 'content': 'c1', 'idempotency_key': 'bk1'},
+                {'kind': 'lesson', 'title': 'L1', 'content': 'c2', 'idempotency_key': 'bk2'},
+            ], expected_rev=0)
+            self.assertEqual(b1['revision'], 2)
+            self.assertEqual([r['idempotent_replay'] for r in b1['results']], [False, False])
+
+            # All-replay skips CAS even with old expected_rev=0 and does not bump revision
+            b_all = append_batch(root, 'p1', [
+                {'kind': 'decision', 'title': 'D1', 'content': 'c1', 'idempotency_key': 'bk1'},
+                {'kind': 'lesson', 'title': 'L1', 'content': 'c2', 'idempotency_key': 'bk2'},
+            ], expected_rev=0)
+            self.assertEqual(b_all['revision'], 2)
+            self.assertEqual([r['idempotent_replay'] for r in b_all['results']], [True, True])
+
+            # Mixed replay + new with stale expected_rev fails
+            with self.assertRaises(RevisionConflictError):
+                append_batch(root, 'p1', [
+                    {'kind': 'decision', 'title': 'D1', 'content': 'c1', 'idempotency_key': 'bk1'},
+                    {'kind': 'note', 'title': 'N3', 'idempotency_key': 'bk3'},
+                ], expected_rev=0)
+
+            # Mixed replay + new with current expected_rev=2 succeeds
+            b_mix = append_batch(root, 'p1', [
+                {'kind': 'decision', 'title': 'D1', 'content': 'c1', 'idempotency_key': 'bk1'},
+                {'kind': 'note', 'title': 'N3', 'idempotency_key': 'bk3'},
+            ], expected_rev=2)
+            self.assertEqual(b_mix['revision'], 3)
+            self.assertEqual([r['idempotent_replay'] for r in b_mix['results']], [True, False])
+
+            # Redacted key inside batch rejected
+            redact_event(root, 'p1', b1['results'][0]['event_id'])
+            with self.assertRaises(ValueError):
+                append_batch(root, 'p1', [
+                    {'kind': 'decision', 'title': 'D1', 'content': 'c1', 'idempotency_key': 'bk1'},
+                ])
+
+            # CLI append-batch --file - with UTF-8 BOM stdin
+            tool = Path(__file__).resolve().parents[1] / 'kit' / 'tools' / 'ledger.py'
+            bom_payload = ('\ufeff' + json.dumps([
+                {'kind': 'note', 'title': 'BOM note', 'content': 'ok', 'idempotency_key': 'bk-bom'},
+            ])).encode('utf-8')
+            cli = subprocess.run(
+                [sys.executable, '-I', '-B', str(tool), '--root', str(root), '--project', 'p1', 'append-batch', '--file', '-'],
+                input=bom_payload,
+                capture_output=True,
+            )
+            self.assertEqual(cli.returncode, 0, cli.stderr.decode('utf-8', errors='replace'))
+            self.assertEqual(json.loads(cli.stdout.decode('utf-8'))['status'], 'OK')
 
 
 if __name__ == '__main__':

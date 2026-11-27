@@ -36,7 +36,8 @@ Local unit tests cover portions of A04, A08, A14–A17 and A19. They do not prov
 | A28 | V2 pacing merge | Weekly burn check with actual reset window; task tags, unknown fit and simultaneous context/quota gates |
 | A29 | Herdr workflow | Actual install/version, pane, detach/reattach and BATON verification; quota remains independent |
 | A30 | Release privacy | Scan exact staged tree including legacy, history exposure and provenance table decision; no private identifiers, secrets or runtime data |
+| A31 | Upstream contribution protocol | `UPSTREAM_POLICY.md` and `contribute/SKILL.md` install on fresh project; existing modified install returns `MERGE_REQUIRED`; live LLM suggestion/draft/approval behavior remains manual/untested |
 
-A25 and A27–A28 have deterministic helper test evidence only. A26 and A29 remain live/manual. A30 candidate scan is not a scan of the actual target branch.
+A25 and A27–A28 have deterministic helper test evidence only. A26, A29 and live A31 model behavior remain live/manual. A30 candidate scan is not a scan of the actual target branch.
 
 Fresh-install preview, reapply, differing existing instructions, existing ignore conflict, symlink escape and shell entrypoint now have local temporary-directory tests. This does not verify Git tracking, every partial-failure path, live skill discovery, existing legacy organizer behavior, or migration.

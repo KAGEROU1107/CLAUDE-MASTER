@@ -35,6 +35,15 @@ Thanks for helping. This kit is used by beginners, so every change must stay **s
 - Python: standard library only, Python 3.9+, run with `-I`.
 - Keep `CLAUDE.md` content short; put detailed procedures in skills.
 
+## LLM-assisted upstream contributions
+
+If you use an LLM with CLAUDE-MASTER and find a reproducible upstream kit defect, follow [UPSTREAM_POLICY](kit/core/UPSTREAM_POLICY.md) and [the contribute skill](kit/skills/contribute/SKILL.md):
+- Build patches in a **fresh clone** of upstream `main`, never from a private project's Git history.
+- Stage only your draft issue/PR text, patch, and commit message in a separate folder (with `--private-denylist` outside it) and run `python3 -I -B kit/tools/release_scan.py <staging-dir>`. A clean scan does **not** prove privacy—manually review and redact paths, usernames, emails, internal URLs, tokens, session logs, and proprietary code before publishing.
+- Remember that pushing to a personal fork already publishes publicly. Review and approve the exact target repo, fork, branch, base SHA, diff, commit messages/trailers, and Git author/email before pushing; disclose AI assistance and confirm you have the right to submit under MIT.
+- Report suspected security issues (including scanner or approval bypasses) privately via [SECURITY.md](SECURITY.md), never in a public issue or PR.
+- Fresh installs pick up new kit files automatically; existing installs with locally modified files return `MERGE_REQUIRED` with no writes and must be upgraded manually.
+
 ## Review
 
 The maintainer reviews every PR. Changes to the core rules (`kit/core/`), the installer, the release scanner, personas' authority model or CI need extra scrutiny and may take longer.

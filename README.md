@@ -46,7 +46,7 @@ Local deterministic tests and the V3 shell entrypoint smoke tests have been run.
 
 ## Contributing
 
-Improvements are welcome from anyone. Read [CONTRIBUTING](CONTRIBUTING.md), open an issue or a pull request against `main`. CI runs the tests and the leak scan on every PR; the maintainer reviews and merges. Report security problems privately as described in [SECURITY](SECURITY.md).
+Improvements are welcome from anyone. Read [CONTRIBUTING](CONTRIBUTING.md), open an issue or a pull request against `main`. For LLM-assisted upstream findings, see [UPSTREAM_POLICY](kit/core/UPSTREAM_POLICY.md) and [the contribute skill](kit/skills/contribute/SKILL.md) (default `SUGGEST`, no automatic pushes). CI runs the tests and the leak scan on every PR; the maintainer reviews and merges (GitHub branch protection is not verified by this repository). Report security problems privately as described in [SECURITY](SECURITY.md).
 
 ## License
 

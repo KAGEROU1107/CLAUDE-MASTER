@@ -18,7 +18,9 @@
 ## Safety checklist
 
 - [ ] No network access, installs, `sudo`, telemetry or credential reads added to scripts
-- [ ] No secrets, personal data, private paths or private repository content
+- [ ] No secrets, personal data, private paths or private repository content (manually reviewed; not relying on `release_scan.py` alone)
 - [ ] Any copied code has a compatible license, cited here
+- [ ] I have the right to submit this change under MIT (including any employer or third-party code)
+- [ ] AI-assisted drafting disclosed (if used) and a human reviewed the full sanitized diff, commit messages, and trailers before pushing
 - [ ] Personas still grant no extra permissions
 - [ ] No "verified/automatic" claim without evidence

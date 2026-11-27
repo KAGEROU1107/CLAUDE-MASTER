@@ -13,3 +13,4 @@
 - At milestones report result, evidence, blockers, meter availability and next action. No background claims without a verified runtime.
 - For critical planning/security/complex debugging/migration/release review enforce the model + high-effort gate and task pacing tag in core/PACING.md. Never infer settings or quota.
 - Optional personas are advisory profiles only; check approved shared skills and actual permissions. Herdr is optional; no automatic workers or private bridges.
+- For genuine upstream kit defects, follow `core/UPSTREAM_POLICY.md` and `skills/contribute/SKILL.md` (default `SUGGEST`; never auto-push or leak private data).

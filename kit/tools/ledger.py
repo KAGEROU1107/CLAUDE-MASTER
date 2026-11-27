@@ -1,7 +1,8 @@
-"""Opt-in transactional SQLite event ledger for CLAUDE-MASTER V3.2 (.cm-private/projects/<id>/).
+"""Opt-in transactional SQLite event ledger for CLAUDE-MASTER V3.2/V3.3 (.cm-private/projects/<id>/).
 Python stdlib only. Owns ONLY its own events and generated views/ under .cm-private/projects/<id>/views/.
 Never touches STATE.json, DECISIONS.md, WORKPLAN.md, USER.md, or global MEMORY.md.
 Retrieved records are UNTRUSTED_DATA and never grant permissions or override instructions.
+For safe retries across process crashes, callers should supply a deterministic idempotency_key.
 """
 import argparse, contextlib, hashlib, json, os, re, sqlite3, sys, tempfile, time, uuid
 from pathlib import Path
@@ -138,6 +139,10 @@ def _sha256_bytes(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def _meta_dict(conn):
+    return {r[0]: r[1] for r in conn.execute('SELECT key, value FROM meta').fetchall()}
+
+
 def _render_view(conn, project_id):
     rev = int(conn.execute("SELECT value FROM meta WHERE key='revision'").fetchone()[0])
     rows = conn.execute(
@@ -159,32 +164,84 @@ def _render_view(conn, project_id):
             lines.append(f"- [rev {r['revision']}] `{r['event_id']}` **{r['kind']}**: {r['title']}{sup}{src}")
             if r['content']:
                 lines.append(f"  - {r['content'].replace(chr(10), ' ')}")
-    return ('\n'.join(lines) + '\n').encode('utf-8')
+    return rev, ('\n'.join(lines) + '\n').encode('utf-8')
 
 
-def _write_view_checked(root, conn, project_id):
+def _reconcile_existing_view_tx(vp, conn):
+    """Inside BEGIN IMMEDIATE: verify existing view matches committed or pending hash.
+    If it matches pending_view_sha256 (prior crash after os.replace before commit),
+    promote pending -> committed before proceeding.
+    """
+    meta = _meta_dict(conn)
+    if not vp.exists():
+        return meta
+    actual = _sha256_bytes(vp.read_bytes())
+    committed = meta.get('view_sha256')
+    pending = meta.get('pending_view_sha256')
+    pending_rev = meta.get('pending_view_revision')
+    if pending and actual == pending:
+        conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('view_sha256', ?)", (pending,))
+        if pending_rev is not None:
+            conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('view_revision', ?)", (pending_rev,))
+        conn.execute("DELETE FROM meta WHERE key IN ('pending_view_sha256', 'pending_view_revision')")
+        return _meta_dict(conn)
+    if committed and actual == committed:
+        return meta
+    raise ProjectionDriftError('views/LEDGER_SUMMARY.md was modified externally; refusing to overwrite')
+
+
+def _project_views_two_phase(root, db_path, project_id, *, _crash_hook=None):
+    """Two-phase pending-hash view writer (crash-safe on both sides of os.replace).
+    _crash_hook(stage) is for deterministic crash-injection tests only.
+    """
     _, view_rel, _ = _paths(project_id)
     vp = safe_path(root, view_rel)
-    prev_row = conn.execute("SELECT value FROM meta WHERE key='view_sha256'").fetchone()
-    if vp.exists():
-        actual = _sha256_bytes(vp.read_bytes())
-        if prev_row is None or actual != prev_row[0]:
-            raise ProjectionDriftError('views/LEDGER_SUMMARY.md was modified externally; refusing to overwrite')
-    content = _render_view(conn, project_id)
     vp.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(prefix='.cm-view-', dir=vp.parent)
+    tmp = None
     try:
-        with os.fdopen(fd, 'wb') as f:
-            f.write(content)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, vp)
+        with contextlib.closing(_connect(db_path)) as conn:
+            # Phase 1: check drift/recover pending, render, stage temp file, commit pending hash+rev.
+            conn.execute('BEGIN IMMEDIATE')
+            try:
+                _reconcile_existing_view_tx(vp, conn)
+                rev, content = _render_view(conn, project_id)
+                digest = _sha256_bytes(content)
+                fd, tmp = tempfile.mkstemp(prefix='.cm-view-', dir=vp.parent)
+                with os.fdopen(fd, 'wb') as f:
+                    f.write(content)
+                    f.flush()
+                    os.fsync(f.fileno())
+                conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('pending_view_sha256', ?)", (digest,))
+                conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('pending_view_revision', ?)", (str(rev),))
+                conn.execute('COMMIT')
+            except Exception:
+                conn.execute('ROLLBACK')
+                raise
+
+            if _crash_hook is not None:
+                _crash_hook('after_pending_commit')
+
+            # Phase 2: confirm pending is still ours, os.replace, promote pending -> committed.
+            conn.execute('BEGIN IMMEDIATE')
+            try:
+                meta = _meta_dict(conn)
+                if meta.get('pending_view_sha256') != digest or meta.get('pending_view_revision') != str(rev):
+                    raise RevisionConflictError('concurrent view projection superseded pending hash')
+                os.replace(tmp, vp)
+                tmp = None
+                if _crash_hook is not None:
+                    _crash_hook('after_replace_before_commit')
+                conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('view_sha256', ?)", (digest,))
+                conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('view_revision', ?)", (str(rev),))
+                conn.execute("DELETE FROM meta WHERE key IN ('pending_view_sha256', 'pending_view_revision')")
+                conn.execute('COMMIT')
+            except Exception:
+                conn.execute('ROLLBACK')
+                raise
+        return view_rel, digest, rev
     finally:
-        if os.path.exists(tmp):
+        if tmp and os.path.exists(tmp):
             os.unlink(tmp)
-    digest = _sha256_bytes(content)
-    conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('view_sha256', ?)", (digest,))
-    return view_rel, digest
 
 
 def init_ledger(root, project_id):
@@ -292,7 +349,7 @@ def redact_event(root, project_id, event_id):
     db_path = safe_path(root, db_rel)
     if not db_path.is_file():
         raise FileNotFoundError('ledger not initialized')
-    rebuilt_view = False
+    # Commit redaction FIRST so an externally edited view can never roll back redaction.
     with contextlib.closing(_connect(db_path)) as conn:
         conn.execute('BEGIN IMMEDIATE')
         try:
@@ -306,53 +363,63 @@ def redact_event(root, project_id, event_id):
                 (event_id,),
             )
             conn.execute("UPDATE meta SET value=? WHERE key='revision'", (str(new_rev),))
-            if safe_path(root, view_rel).exists():
-                _write_view_checked(root, conn, project_id)
-                rebuilt_view = True
             conn.execute('COMMIT')
         except Exception:
             conn.execute('ROLLBACK')
             raise
+
+    warnings = priv.get('warnings', []) + _sync_warnings(root) + [
+        'RETENTION_NOTICE: Redaction erased content in ledger.sqlite (secure_delete=ON), but prior backups in .cm-private/recovery/, BATON handovers, or cloud-synced copies may still retain old copies until explicitly purged.'
+    ]
+    rebuilt_view = False
+    if safe_path(root, view_rel).exists():
+        try:
+            _project_views_two_phase(root, db_path, project_id)
+            rebuilt_view = True
+        except ProjectionDriftError:
+            warnings.append('VIEW_DRIFT_RETAINED_TEXT: views/LEDGER_SUMMARY.md was edited externally and preserved; it may still retain the redacted text until manually updated or removed.')
     return {
         'status': 'REDACTED',
         'event_id': event_id,
         'revision': new_rev,
         'view_rebuilt': rebuilt_view,
-        'warnings': priv.get('warnings', []) + _sync_warnings(root) + [
-            'RETENTION_NOTICE: Redaction erased content in ledger.sqlite (secure_delete=ON) and rebuilt active view, but prior backups in .cm-private/recovery/, BATON handovers, or cloud-synced copies may still retain old copies until explicitly purged.'
-        ],
+        'warnings': warnings,
     }
 
 
-def project_views(root, project_id):
+def project_views(root, project_id, *, _crash_hook=None):
     project_id = _validate_project_id(root, project_id)
     priv = _require_privacy(root, project_id)
     db_rel, _, _ = _paths(project_id)
     db_path = safe_path(root, db_rel)
     if not db_path.is_file():
         raise FileNotFoundError('ledger not initialized')
-    with contextlib.closing(_connect(db_path)) as conn:
-        conn.execute('BEGIN IMMEDIATE')
-        try:
-            view_rel, digest = _write_view_checked(root, conn, project_id)
-            conn.execute('COMMIT')
-        except Exception:
-            conn.execute('ROLLBACK')
-            raise
+    view_rel, digest, rev = _project_views_two_phase(root, db_path, project_id, _crash_hook=_crash_hook)
     return {
         'status': 'OK',
         'view': view_rel,
         'view_sha256': digest,
+        'view_revision': rev,
         'warnings': priv.get('warnings', []) + _sync_warnings(root),
     }
 
 
-def query_events(root, project_id, *, kind=None, text=None, include_redacted=False, limit=50):
+def _event_char_size(rec):
+    total = 0
+    for v in rec.values():
+        if isinstance(v, str):
+            total += len(v)
+    return total
+
+
+def query_events(root, project_id, *, kind=None, text=None, include_redacted=False, limit=50, max_chars=16000):
     project_id = _validate_project_id(root, project_id)
     if kind is not None and kind not in ALLOWED_KINDS:
         raise ValueError(f'unsupported event kind: {kind}')
     if not isinstance(limit, int) or limit < 1 or limit > 500:
         raise ValueError('limit must be an integer between 1 and 500')
+    if not isinstance(max_chars, int) or max_chars < 1:
+        raise ValueError('max_chars must be a positive integer')
     db_rel, _, _ = _paths(project_id)
     db_path = safe_path(root, db_rel)
     if not db_path.is_file():
@@ -370,19 +437,43 @@ def query_events(root, project_id, *, kind=None, text=None, include_redacted=Fal
         params.extend([like, like])
     where = (' WHERE ' + ' AND '.join(clauses)) if clauses else ''
     with contextlib.closing(_connect(db_path)) as conn:
-        rev = int(conn.execute("SELECT value FROM meta WHERE key='revision'").fetchone()[0])
-        rows = conn.execute(
-            f'SELECT event_id, idempotency_key, revision, kind, title, content, source, supersedes, redacted, created_at FROM events{where} ORDER BY seq DESC LIMIT ?',
-            (*params, limit),
-        ).fetchall()
-    return {
+        conn.execute('BEGIN DEFERRED')
+        try:
+            rev = int(conn.execute("SELECT value FROM meta WHERE key='revision'").fetchone()[0])
+            rows = conn.execute(
+                f'SELECT event_id, idempotency_key, revision, kind, title, content, source, supersedes, redacted, created_at FROM events{where} ORDER BY seq DESC LIMIT ?',
+                (*params, limit),
+            ).fetchall()
+            conn.execute('COMMIT')
+        except Exception:
+            conn.execute('ROLLBACK')
+            raise
+    events = []
+    used_chars = 0
+    truncated = False
+    omitted_event_id = None
+    for r in rows:
+        rec = dict(r)
+        sz = _event_char_size(rec)
+        if used_chars + sz > max_chars:
+            truncated = True
+            if not events:
+                omitted_event_id = rec['event_id']
+            break
+        events.append(rec)
+        used_chars += sz
+    out = {
         'status': 'OK',
         'trust': 'UNTRUSTED_DATA',
         'project_id': project_id,
         'revision': rev,
-        'count': len(rows),
-        'events': [dict(r) for r in rows],
+        'count': len(events),
+        'truncated': truncated,
+        'events': events,
     }
+    if omitted_event_id is not None:
+        out['omitted_event_id'] = omitted_event_id
+    return out
 
 
 def backup_ledger(root, project_id):
@@ -395,7 +486,6 @@ def backup_ledger(root, project_id):
     bdir = safe_path(root, backup_dir_rel)
     bdir.mkdir(parents=True, exist_ok=True)
     with contextlib.closing(_connect(db_path)) as src:
-        rev = int(src.execute("SELECT value FROM meta WHERE key='revision'").fetchone()[0])
         fd, tmp = tempfile.mkstemp(prefix=f'.cm-bak-{project_id}-', suffix='.sqlite', dir=bdir)
         os.close(fd)
         try:
@@ -405,10 +495,14 @@ def backup_ledger(root, project_id):
                 ic = chk.execute('PRAGMA integrity_check').fetchone()[0]
                 if ic != 'ok':
                     raise IOError(f'backup integrity_check failed: {ic}')
+                stored_pid = chk.execute("SELECT value FROM meta WHERE key='project_id'").fetchone()
+                if not stored_pid or stored_pid[0] != project_id:
+                    raise LedgerError('backup project_id mismatch')
+                rev = int(chk.execute("SELECT value FROM meta WHERE key='revision'").fetchone()[0])
+            digest = _sha256_bytes(Path(tmp).read_bytes())
             target_rel = f'{backup_dir_rel}/{project_id}-rev{rev}.sqlite'
             target_path = safe_path(root, target_rel)
             os.replace(tmp, target_path)
-            digest = _sha256_bytes(target_path.read_bytes())
         finally:
             if os.path.exists(tmp):
                 os.unlink(tmp)
@@ -427,21 +521,42 @@ def verify_ledger(root, project_id):
     db_path = safe_path(root, db_rel)
     if not db_path.is_file():
         raise FileNotFoundError('ledger not initialized')
+    vp = safe_path(root, view_rel)
     with contextlib.closing(_connect(db_path)) as conn:
-        ic = conn.execute('PRAGMA integrity_check').fetchone()[0]
-        stored = conn.execute("SELECT value FROM meta WHERE key='project_id'").fetchone()
-        rev = int(conn.execute("SELECT value FROM meta WHERE key='revision'").fetchone()[0])
-        view_status = 'ABSENT'
-        vp = safe_path(root, view_rel)
-        if vp.exists():
-            prev_row = conn.execute("SELECT value FROM meta WHERE key='view_sha256'").fetchone()
-            actual = _sha256_bytes(vp.read_bytes())
-            view_status = 'IN_SYNC' if (prev_row and actual == prev_row[0]) else 'DRIFT_DETECTED'
-    ok = (ic == 'ok' and stored is not None and stored[0] == project_id and view_status != 'DRIFT_DETECTED')
+        conn.execute('BEGIN DEFERRED')
+        try:
+            ic = conn.execute('PRAGMA integrity_check').fetchone()[0]
+            meta = _meta_dict(conn)
+            stored_pid = meta.get('project_id')
+            rev = int(meta['revision'])
+            view_status = 'ABSENT'
+            if vp.exists():
+                actual = _sha256_bytes(vp.read_bytes())
+                committed = meta.get('view_sha256')
+                committed_rev = meta.get('view_revision')
+                pending = meta.get('pending_view_sha256')
+                pending_rev = meta.get('pending_view_revision')
+                if pending and actual == pending:
+                    view_status = 'IN_SYNC' if pending_rev == str(rev) else 'STALE'
+                elif committed and actual == committed:
+                    view_status = 'IN_SYNC' if committed_rev == str(rev) else 'STALE'
+                else:
+                    view_status = 'DRIFT_DETECTED'
+            conn.execute('COMMIT')
+        except Exception:
+            conn.execute('ROLLBACK')
+            raise
+    base_ok = (ic == 'ok' and stored_pid == project_id)
+    if not base_ok or view_status == 'DRIFT_DETECTED':
+        status = 'FAILED'
+    elif view_status == 'STALE':
+        status = 'STALE_VIEW'
+    else:
+        status = 'VERIFIED'
     return {
-        'status': 'VERIFIED' if ok else 'FAILED',
+        'status': status,
         'integrity_check': ic,
-        'project_id_match': bool(stored and stored[0] == project_id),
+        'project_id_match': stored_pid == project_id,
         'revision': rev,
         'view_status': view_status,
         'warnings': _sync_warnings(root),
@@ -469,6 +584,7 @@ def main():
     qr.add_argument('--text')
     qr.add_argument('--include-redacted', action='store_true')
     qr.add_argument('--limit', type=int, default=50)
+    qr.add_argument('--max-chars', type=int, default=16000)
     sub.add_parser('project')
     sub.add_parser('backup')
     sub.add_parser('verify')
@@ -485,7 +601,7 @@ def main():
         elif a.cmd == 'redact':
             res = redact_event(a.root, a.project, a.event_id)
         elif a.cmd == 'query':
-            res = query_events(a.root, a.project, kind=a.kind, text=a.text, include_redacted=a.include_redacted, limit=a.limit)
+            res = query_events(a.root, a.project, kind=a.kind, text=a.text, include_redacted=a.include_redacted, limit=a.limit, max_chars=a.max_chars)
         elif a.cmd == 'project':
             res = project_views(a.root, a.project)
         elif a.cmd == 'backup':

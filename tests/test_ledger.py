@@ -121,6 +121,90 @@ class LedgerEngineTests(unittest.TestCase):
             with self.assertRaises(LedgerError):
                 verify_ledger(root, 'p1')
 
+    def test_stale_view_detected_and_not_verified(self):
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            _git_repo(root)
+            init_ledger(root, 'p1')
+            append_event(root, 'p1', kind='note', title='First', idempotency_key='k1')
+            project_views(root, 'p1')
+            self.assertEqual(verify_ledger(root, 'p1')['status'], 'VERIFIED')
+            self.assertEqual(verify_ledger(root, 'p1')['view_status'], 'IN_SYNC')
+
+            # Append rev 2 without re-projecting -> view must be STALE, NOT VERIFIED!
+            append_event(root, 'p1', kind='note', title='Second', idempotency_key='k2')
+            v = verify_ledger(root, 'p1')
+            self.assertEqual(v['view_status'], 'STALE')
+            self.assertEqual(v['status'], 'STALE_VIEW')
+
+            # Re-project -> back to VERIFIED / IN_SYNC
+            project_views(root, 'p1')
+            self.assertEqual(verify_ledger(root, 'p1')['status'], 'VERIFIED')
+
+    def test_pending_hash_crash_recovery_both_sides_of_replace(self):
+        for stage in ('after_pending_commit', 'after_replace_before_commit'):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory() as t:
+                root = Path(t)
+                _git_repo(root)
+                init_ledger(root, 'p1')
+                append_event(root, 'p1', kind='note', title='Init', idempotency_key='k1')
+                project_views(root, 'p1')
+                append_event(root, 'p1', kind='note', title='Update', idempotency_key='k2')
+
+                def crash(s):
+                    if s == stage:
+                        raise RuntimeError(f'simulated crash at {s}')
+
+                with self.assertRaises(RuntimeError):
+                    project_views(root, 'p1', _crash_hook=crash)
+
+                # Retry project_views must recover cleanly without false ProjectionDriftError!
+                recovered = project_views(root, 'p1')
+                self.assertEqual(recovered['status'], 'OK')
+                self.assertEqual(recovered['view_revision'], 2)
+                self.assertEqual(verify_ledger(root, 'p1')['status'], 'VERIFIED')
+
+    def test_redact_commits_even_when_view_has_external_drift(self):
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            _git_repo(root)
+            init_ledger(root, 'p1')
+            e1 = append_event(root, 'p1', kind='note', title='Secret', content='secret-val-42', idempotency_key='k-s')
+            project_views(root, 'p1')
+            view_path = root / '.cm-private/projects/p1/views/LEDGER_SUMMARY.md'
+            view_path.write_text('user edited view\n', encoding='utf-8')
+
+            rd = redact_event(root, 'p1', e1['event_id'])
+            self.assertEqual(rd['status'], 'REDACTED')
+            self.assertFalse(rd['view_rebuilt'])
+            self.assertTrue(any('VIEW_DRIFT_RETAINED_TEXT' in w for w in rd['warnings']))
+            # User edited view preserved AND DB redaction committed
+            self.assertEqual(view_path.read_text(encoding='utf-8'), 'user edited view\n')
+            q = query_events(root, 'p1', include_redacted=True)
+            self.assertEqual(q['events'][0]['redacted'], 1)
+            self.assertIsNone(q['events'][0]['content'])
+
+    def test_query_max_chars_truncation_and_omitted_event_id(self):
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            _git_repo(root)
+            init_ledger(root, 'p1')
+            e1 = append_event(root, 'p1', kind='note', title='Short', content='A' * 40, idempotency_key='k1')
+            e2 = append_event(root, 'p1', kind='note', title='Huge', content='B' * 500, idempotency_key='k2')
+
+            # First (newest) event alone exceeds max_chars -> returns 0 events + truncated + omitted_event_id
+            q1 = query_events(root, 'p1', max_chars=100)
+            self.assertEqual(q1['count'], 0)
+            self.assertTrue(q1['truncated'])
+            self.assertEqual(q1['omitted_event_id'], e2['event_id'])
+
+            # Large enough for e2 but not both -> returns 1 whole event + truncated
+            q2 = query_events(root, 'p1', max_chars=560)
+            self.assertEqual(q2['count'], 1)
+            self.assertTrue(q2['truncated'])
+            self.assertEqual(q2['events'][0]['event_id'], e2['event_id'])
+            self.assertNotIn('omitted_event_id', q2)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -76,6 +76,20 @@ class PrivacyCheckTests(unittest.TestCase):
             self.assertEqual(res['status'], 'PASS')
             self.assertIn('GLOBAL_OR_LOCAL_IGNORE_ONLY', res['warnings'])
 
+    def test_external_excludes_file_named_gitignore_is_not_project_ignore(self):
+        # e.g. core.excludesFile=~/.gitignore: same filename, but not part of the project.
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t) / 'project'
+            root.mkdir()
+            _git(root, 'init', '-q')
+            outside = Path(t) / 'home' / '.gitignore'
+            outside.parent.mkdir()
+            outside.write_text('.cm-private/\n', encoding='utf-8')
+            _git(root, 'config', 'core.excludesFile', outside.as_posix())
+            res = check_privacy(root)
+            self.assertEqual(res['status'], 'PASS')
+            self.assertIn('GLOBAL_OR_LOCAL_IGNORE_ONLY', res['warnings'])
+
     def test_non_git_directory_returns_unknown_and_cli_exit_2(self):
         with tempfile.TemporaryDirectory() as t:
             res = check_privacy(t)

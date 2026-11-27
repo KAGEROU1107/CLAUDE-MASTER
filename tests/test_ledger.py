@@ -285,6 +285,76 @@ class LedgerEngineTests(unittest.TestCase):
             self.assertEqual(cli.returncode, 0, cli.stderr.decode('utf-8', errors='replace'))
             self.assertEqual(json.loads(cli.stdout.decode('utf-8'))['status'], 'OK')
 
+    def test_foreign_ledger_refused_by_every_operation_without_mutation(self):
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            _git_repo(root)
+            init_ledger(root, 'a')
+            init_ledger(root, 'b')
+            e = append_event(root, 'b', kind='note', title='belongs-to-b', idempotency_key='kb')
+            db_a = root / '.cm-private/projects/a/ledger.sqlite'
+            shutil.copy2(root / '.cm-private/projects/b/ledger.sqlite', db_a)
+            before = db_a.read_bytes()
+            ops = {
+                'init': lambda: init_ledger(root, 'a'),
+                'append': lambda: append_event(root, 'a', kind='note', title='x', idempotency_key='kx'),
+                'append_replay': lambda: append_event(root, 'a', kind='note', title='belongs-to-b', idempotency_key='kb'),
+                'append_batch': lambda: append_batch(root, 'a', [{'kind': 'note', 'title': 'y', 'idempotency_key': 'ky'}]),
+                'query': lambda: query_events(root, 'a'),
+                'redact': lambda: redact_event(root, 'a', e['event_id']),
+                'project': lambda: project_views(root, 'a'),
+                'backup': lambda: backup_ledger(root, 'a'),
+            }
+            for name, op in ops.items():
+                with self.subTest(op=name), self.assertRaisesRegex(LedgerError, 'project_id mismatch'):
+                    op()
+                self.assertEqual(db_a.read_bytes(), before, f'{name} modified a foreign ledger')
+            self.assertFalse((root / '.cm-private/projects/a/views/LEDGER_SUMMARY.md').exists())
+            v = verify_ledger(root, 'a')
+            self.assertEqual(v['status'], 'FAILED')
+            self.assertFalse(v['project_id_match'])
+
+    def test_database_without_ledger_schema_is_blocked_not_a_traceback(self):
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            _git_repo(root)
+            db = root / '.cm-private/projects/p1/ledger.sqlite'
+            db.parent.mkdir(parents=True)
+            db.write_bytes(b'')
+            with self.assertRaisesRegex(LedgerError, 'not an initialized ledger'):
+                query_events(root, 'p1')
+
+    def test_view_escapes_untrusted_fields_and_carries_warning_banner(self):
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            _git_repo(root)
+            init_ledger(root, 'p1')
+            append_event(
+                root, 'p1', kind='note',
+                title='ok\n# FORGED HEADING\n<script>x</script>',
+                content='a\r- forged bullet\u2028![img](http://evil.invalid/p.png) `tick` \x1b[31m \u202eflip',
+                source='[click](http://evil.invalid) &lt;',
+                idempotency_key='k1',
+            )
+            append_event(root, 'p1', kind='note', title='plain', content='# not a heading', idempotency_key='k2')
+            append_event(root, 'p1', kind='note', title='list', content='1. not a list', idempotency_key='k3')
+            project_views(root, 'p1')
+            text = (root / '.cm-private/projects/p1/views/LEDGER_SUMMARY.md').read_bytes().decode('utf-8')
+            self.assertIn('UNTRUSTED DATA', text)
+            self.assertLess(text.index('UNTRUSTED DATA'), text.index('- [rev 1]'))
+            lines = text.split('\n')
+            self.assertEqual([x for x in lines if x.startswith('#')], ['# Ledger View: p1'])
+            for raw in ('<script>', '![img](', '[click](', '`tick`', '\r', '\u2028', '\x1b', '\u202e'):
+                self.assertNotIn(raw, text)
+            self.assertIn('&lt;script&gt;', text)
+            self.assertIn('&amp;lt;', text)
+            self.assertIn(r'  - \# not a heading', lines)
+            self.assertIn(r'  - 1\. not a list', lines)
+            # Only the display is escaped: stored data is returned unchanged.
+            titles = [r['title'] for r in query_events(root, 'p1')['events']]
+            self.assertIn('ok\n# FORGED HEADING\n<script>x</script>', titles)
+            self.assertEqual(verify_ledger(root, 'p1')['status'], 'VERIFIED')
+
 
 if __name__ == '__main__':
     unittest.main()

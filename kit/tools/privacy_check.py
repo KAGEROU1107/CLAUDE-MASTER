@@ -2,7 +2,7 @@
 Checks effective Git ignore rules, tracked private files, and exposed untracked private files.
 Never prints private filenames; reports Git history as NOT_CHECKED.
 """
-import argparse, hashlib, json, os, subprocess, sys
+import argparse, hashlib, json, os, re, subprocess, sys
 from pathlib import Path
 
 DEFAULT_PROBES = (
@@ -11,6 +11,15 @@ DEFAULT_PROBES = (
     '.cm-private/projects/_probe/ledger.sqlite-journal',
     '.cm-private/recovery/_probe.sqlite',
 )
+
+
+def _is_project_gitignore(source):
+    """Git prints per-directory ignore files as relative paths. An anchored path is an
+    external core.excludesFile, even when it is also named .gitignore (e.g. ~/.gitignore).
+    """
+    if re.match(r'[/~]|[A-Za-z]:', source):
+        return False
+    return source == '.gitignore' or source.endswith('/.gitignore')
 
 
 def _clean_env():
@@ -121,7 +130,7 @@ def check_privacy(root, *, probes=None, timeout=10):
             pattern = parts[2] if len(parts) == 3 else ''
             if pattern.startswith('!'):
                 unignored_probes.append(_sha(probe))
-            elif not (source == '.gitignore' or source.endswith('/.gitignore')):
+            elif not _is_project_gitignore(source):
                 local_or_global_only = True
         else:
             return {

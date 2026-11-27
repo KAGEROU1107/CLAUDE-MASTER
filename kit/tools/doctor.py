@@ -44,7 +44,12 @@ def diagnose(root, kit, *, target='claude', preserve_claude_md=False, preserve_g
         preserve_gemini_md=preserve_gemini_md,
     )
 
-    ready = py_ok and bool(git_version) and privacy.get('status') == 'PASS' and install_status.get('status') == 'IN_SYNC'
+    # privacy_check still reports PASS here; for a beginner it is not yet safe enough to call READY.
+    local_ignore_only = 'GLOBAL_OR_LOCAL_IGNORE_ONLY' in privacy.get('warnings', [])
+    ready = (
+        py_ok and bool(git_version) and privacy.get('status') == 'PASS' and not local_ignore_only
+        and install_status.get('status') == 'IN_SYNC'
+    )
     next_steps = []
     if not py_ok:
         next_steps.append('Install Python 3.9 or newer.')
@@ -54,6 +59,8 @@ def diagnose(root, kit, *, target='claude', preserve_claude_md=False, preserve_g
         next_steps.append('Initialize Git (`git init`) in your project folder before saving private memory.')
     elif privacy.get('status') == 'FAIL':
         next_steps.append('Fix .gitignore so .cm-private/ is ignored and untracked before writing private state.')
+    elif local_ignore_only:
+        next_steps.append("Add .cm-private/ to this project's .gitignore: it is ignored only by local or global Git rules, which do not travel with the project.")
     if install_status.get('status') != 'IN_SYNC':
         diff_count = len(install_status.get('differing_or_colliding', []))
         flag = f'--target {target} ' if target != 'claude' else ''

@@ -1,5 +1,6 @@
 import json, subprocess, sys, tempfile, unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'kit' / 'tools'))
 from doctor import diagnose
@@ -66,6 +67,19 @@ class DoctorTests(unittest.TestCase):
             self.assertEqual(bp['status'], 'BLOCKED')
             self.assertEqual(bp['scope'], 'DETERMINISTIC_PREFLIGHT_ONLY')
             self.assertEqual(bp['live_ai_runtime'], 'UNVERIFIED')
+
+    def test_global_or_local_ignore_only_is_not_ready(self):
+        # With a real install this state is normally also caught by install drift,
+        # so isolate the privacy gate: everything else reports healthy.
+        privacy = {'status': 'PASS', 'warnings': ['GLOBAL_OR_LOCAL_IGNORE_ONLY']}
+        installed = {'status': 'IN_SYNC', 'in_sync_count': 1}
+        with tempfile.TemporaryDirectory() as t, mock.patch('doctor.check_privacy', return_value=privacy), \
+                mock.patch('doctor.check_install', return_value=installed):
+            res = diagnose(Path(t), KIT)
+        self.assertEqual(res['status'], 'ACTION_NEEDED')
+        self.assertEqual(res['privacy']['status'], 'PASS')
+        self.assertEqual(len(res['next_steps']), 1)
+        self.assertIn(".cm-private/ to this project's .gitignore", res['next_steps'][0])
 
 
 if __name__ == '__main__':
